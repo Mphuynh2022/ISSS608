@@ -152,5 +152,61 @@
     "title": "Hands-on Exercise 2",
     "section": "Composite graphs",
     "text": "Composite graphs\n\nPathwork methods\n\nCreating a composite figure with tag\n\np1 <- ggplot(data=exam_data, \n             aes(x = MATHS)) +\n  geom_histogram(bins=20, \n                 boundary = 100,\n                 color=\"grey25\", \n                 fill=\"grey90\") + \n  coord_cartesian(xlim=c(0,100)) +\n  ggtitle(\"Distribution of Maths scores\")\n\np2 <- ggplot(data=exam_data, \n             aes(x = ENGLISH)) +\n  geom_histogram(bins=20, \n                 boundary = 100,\n                 color=\"grey25\", \n                 fill=\"grey90\") +\n  coord_cartesian(xlim=c(0,100)) +\n  ggtitle(\"Distribution of English scores\")\n\np3 <- ggplot(data=exam_data, \n             aes(x= MATHS, \n                 y=ENGLISH)) +\n  geom_point() +\n  geom_smooth(method=lm, \n              size=0.5) +  \n  coord_cartesian(xlim=c(0,100),\n                  ylim=c(0,100)) +\n  ggtitle(\"English scores versus Maths scores for Primary 3\")\n\n\n#“|” operator to stack two ggplot2 graphs\n#“/” operator to place the plots beside each other\n#“()” operator the define the sequence of the plotting\n((p1 / p2) | p3) + \n  plot_annotation(tag_levels = 'I')\n\n\n\n\n\n\nCreating figure with insert\n\np12 <- p1|p2\np3 + inset_element(p2, \n                   left = 0.02, \n                   bottom = 0.7, \n                   right = 0.5, \n                   top = 1)\n\n\n\n\n\n\nCreating a composite figure by using patchwork and ggtheme\n\npatchwork <- (p1 / p2) | p3\npatchwork & theme_economist()"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex04/In-class_Ex04.html",
+    "href": "In-class_Ex/In-class_Ex04/In-class_Ex04.html",
+    "title": "In-class Exercise 4",
+    "section": "",
+    "text": "pacman::p_load(ggstatsplot, rstatix, gt, patchwork, tidyverse)\n\n\n\n\n\nexam_data <- read_csv(\"data/Exam_data.csv\")"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#one-sample-test",
+    "href": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#one-sample-test",
+    "title": "In-class Exercise 4",
+    "section": "One sample test",
+    "text": "One sample test\n\nset.seed(1234)\n\ngghistostats(\n  data = exam_data,\n  x = ENGLISH,\n  type = \"p\",\n  test.value = 60,\n  xlab = \"English scores\"\n)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#two-sample-test",
+    "href": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#two-sample-test",
+    "title": "In-class Exercise 4",
+    "section": "Two sample test",
+    "text": "Two sample test\n\nggbetweenstats(\n  data = exam_data,\n  x = GENDER, \n  y = MATHS,\n  type = \"p\",\n  messages = FALSE\n)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html",
+    "title": "In class Exercise 5",
+    "section": "",
+    "text": "pacman::p_load(igraph, tidygraph, ggraph, \n               visNetwork, lubridate, clock,\n               tidyverse, graphlayouts)\n\npackage 'igraph' successfully unpacked and MD5 sums checked\n\nThe downloaded binary packages are in\n    C:\\Users\\User\\AppData\\Local\\Temp\\RtmpmkSHaR\\downloaded_packages\npackage 'tidygraph' successfully unpacked and MD5 sums checked\n\nThe downloaded binary packages are in\n    C:\\Users\\User\\AppData\\Local\\Temp\\RtmpmkSHaR\\downloaded_packages\npackage 'polyclip' successfully unpacked and MD5 sums checked\npackage 'ggforce' successfully unpacked and MD5 sums checked\npackage 'graphlayouts' successfully unpacked and MD5 sums checked\npackage 'ggraph' successfully unpacked and MD5 sums checked\n\nThe downloaded binary packages are in\n    C:\\Users\\User\\AppData\\Local\\Temp\\RtmpmkSHaR\\downloaded_packages\npackage 'visNetwork' successfully unpacked and MD5 sums checked\n\nThe downloaded binary packages are in\n    C:\\Users\\User\\AppData\\Local\\Temp\\RtmpmkSHaR\\downloaded_packages\npackage 'tzdb' successfully unpacked and MD5 sums checked\npackage 'cpp11' successfully unpacked and MD5 sums checked\npackage 'clock' successfully unpacked and MD5 sums checked\n\nThe downloaded binary packages are in\n    C:\\Users\\User\\AppData\\Local\\Temp\\RtmpmkSHaR\\downloaded_packages\n\n\n\n\n\n\nGAStech_nodes <- read_csv(\"data/GAStech_email_node.csv\")\nGAStech_edges <- read_csv(\"data/GAStech_email_edge-v2.csv\")\n\n\n\n\n\nglimpse(GAStech_edges)\n\nRows: 9,063\nColumns: 8\n$ source      <dbl> 43, 43, 44, 44, 44, 44, 44, 44, 44, 44, 44, 44, 26, 26, 26…\n$ target      <dbl> 41, 40, 51, 52, 53, 45, 44, 46, 48, 49, 47, 54, 27, 28, 29…\n$ SentDate    <chr> \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\"…\n$ SentTime    <time> 08:39:00, 08:39:00, 08:58:00, 08:58:00, 08:58:00, 08:58:0…\n$ Subject     <chr> \"GT-SeismicProcessorPro Bug Report\", \"GT-SeismicProcessorP…\n$ MainSubject <chr> \"Work related\", \"Work related\", \"Work related\", \"Work rela…\n$ sourceLabel <chr> \"Sven.Flecha\", \"Sven.Flecha\", \"Kanon.Herrero\", \"Kanon.Herr…\n$ targetLabel <chr> \"Isak.Baza\", \"Lucas.Alcazar\", \"Felix.Resumir\", \"Hideki.Coc…\n\n\n\n\n\nData type SentDate should be converted to date. Get information of the day in the week that emails are sent by using wday()\n\nGAStech_edges <- GAStech_edges %>%\n  mutate(SendDate = dmy(SentDate)) %>%\n  mutate(Weekday = wday(SentDate,\n                        label = TRUE,\n                        abbr = FALSE))\nglimpse(GAStech_edges)\n\nRows: 9,063\nColumns: 10\n$ source      <dbl> 43, 43, 44, 44, 44, 44, 44, 44, 44, 44, 44, 44, 26, 26, 26…\n$ target      <dbl> 41, 40, 51, 52, 53, 45, 44, 46, 48, 49, 47, 54, 27, 28, 29…\n$ SentDate    <chr> \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\"…\n$ SentTime    <time> 08:39:00, 08:39:00, 08:58:00, 08:58:00, 08:58:00, 08:58:0…\n$ Subject     <chr> \"GT-SeismicProcessorPro Bug Report\", \"GT-SeismicProcessorP…\n$ MainSubject <chr> \"Work related\", \"Work related\", \"Work related\", \"Work rela…\n$ sourceLabel <chr> \"Sven.Flecha\", \"Sven.Flecha\", \"Kanon.Herrero\", \"Kanon.Herr…\n$ targetLabel <chr> \"Isak.Baza\", \"Lucas.Alcazar\", \"Felix.Resumir\", \"Hideki.Coc…\n$ SendDate    <date> 2014-01-06, 2014-01-06, 2014-01-06, 2014-01-06, 2014-01-0…\n$ Weekday     <ord> Friday, Friday, Friday, Friday, Friday, Friday, Friday, Fr…\n\n\n\n\n\nFilter work related subjects Exclude emails sent to self Count the numbers of emails as weight\n\nGAStech_edges_aggregated <- GAStech_edges %>%\n  filter(MainSubject == \"Work related\") %>%\n  group_by(source, target, Weekday) %>%\n    summarise(Weight = n()) %>%\n  filter(source!=target) %>%\n  filter(Weight > 1) %>%\n  ungroup()\n\nglimpse(GAStech_edges_aggregated)\n\nRows: 1,372\nColumns: 4\n$ source  <dbl> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,…\n$ target  <dbl> 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6,…\n$ Weekday <ord> Sunday, Monday, Tuesday, Wednesday, Friday, Sunday, Monday, Tu…\n$ Weight  <int> 5, 2, 3, 4, 6, 5, 2, 3, 4, 6, 5, 2, 3, 4, 6, 5, 2, 3, 4, 6, 5,…\n\n\n\n\n\n\n\n\nGraph is directed from source to target\n\n\nCreate a graph object\n\nGAStech_graph <- tbl_graph(nodes = GAStech_nodes,\n                           edges = GAStech_edges_aggregated, \n                           directed = TRUE)\nGAStech_graph\n\n# A tbl_graph: 54 nodes and 1372 edges\n#\n# A directed multigraph with 1 component\n#\n# A tibble: 54 × 4\n     id label               Department     Title                                \n  <dbl> <chr>               <chr>          <chr>                                \n1     1 Mat.Bramar          Administration Assistant to CEO                     \n2     2 Anda.Ribera         Administration Assistant to CFO                     \n3     3 Rachel.Pantanal     Administration Assistant to CIO                     \n4     4 Linda.Lagos         Administration Assistant to COO                     \n5     5 Ruscella.Mies.Haber Administration Assistant to Engineering Group Manag…\n6     6 Carla.Forluniau     Administration Assistant to IT Group Manager        \n# ℹ 48 more rows\n#\n# A tibble: 1,372 × 4\n   from    to Weekday Weight\n  <int> <int> <ord>    <int>\n1     1     2 Sunday       5\n2     1     2 Monday       2\n3     1     2 Tuesday      3\n# ℹ 1,369 more rows\n\n\n\n\n\nData Preparation\n\nGAStech_edges_aggregated <- GAStech_edges %>%\n  left_join(GAStech_nodes, by = c(\"sourceLabel\" = \"label\")) %>%\n  rename(from = id) %>%\n  left_join(GAStech_nodes, by = c(\"targetLabel\" = \"label\")) %>%\n  rename(to = id) %>%\n  filter(MainSubject == \"Work related\") %>%\n  group_by(from, to) %>%\n    summarise(weight = n()) %>%\n  filter(from!=to) %>%\n  filter(weight > 1) %>%\n  ungroup()\n\nForce directed graph: with forces pushing nodes apart and links pulling connected nodes together\n\nvisNetwork(GAStech_nodes,\n           GAStech_edges_aggregated)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#load-packages",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#load-packages",
+    "title": "In class Exercise 5",
+    "section": "Load packages",
+    "text": "Load packages\n\npacman::p_load(jsonlite,tidygraph,ggraph,visNetwork,tidyverse)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#import-json-file",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#import-json-file",
+    "title": "In class Exercise 5",
+    "section": "Import Json file",
+    "text": "Import Json file\n\nMC1<-fromJSON(\"data/MC1.json\")"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#extract-node-information",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#extract-node-information",
+    "title": "In class Exercise 5",
+    "section": "Extract node information",
+    "text": "Extract node information\n\nMC1_nodes <- as_tibble(MC1$nodes) %>% \n  select(id,type,country)\n\nglimpse(MC1_nodes)\n\nRows: 3,428\nColumns: 3\n$ id      <chr> \"Spanish Shrimp  Carriers\", \"12744\", \"143129355\", \"7775\", \"101…\n$ type    <chr> \"company\", \"organization\", \"organization\", \"organization\", \"or…\n$ country <chr> \"Nalakond\", NA, NA, NA, NA, NA, NA, \"Rio Isla\", NA, NA, NA, NA…"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#extract-edge-information",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#extract-edge-information",
+    "title": "In class Exercise 5",
+    "section": "Extract edge information",
+    "text": "Extract edge information\n\nMC1_edges <-as_tibble(MC1$links) %>% \n  select(source, target, type, weight, key)\n\nglimpse(MC1_edges)\n\nRows: 11,069\nColumns: 5\n$ source <chr> \"Spanish Shrimp  Carriers\", \"Spanish Shrimp  Carriers\", \"Spanis…\n$ target <chr> \"12744\", \"21323516\", \"290834957\", \"3506021\", \"Conventionâ\", \"22…\n$ type   <chr> \"ownership\", \"partnership\", \"partnership\", \"ownership\", \"family…\n$ weight <dbl> 0.9001396, 0.8458973, 0.9648761, 0.9642126, 0.8234858, 0.893152…\n$ key    <int> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …"
   }
 ]

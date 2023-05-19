@@ -1,0 +1,134 @@
+---
+title: "In class Exercise 5"
+author: "Huynh Minh Phuong"
+date: "13 May 2023"
+date-modified: "`r Sys.Date()`"
+#format:
+  #html:
+    #code-fold: true
+    #code-summary: "Show the code"
+execute:
+  echo: true
+  eval: true
+  warning: false
+editor: visual
+---
+# Revision hands-on 5
+## Install and launch packages
+```{r}
+pacman::p_load(igraph, tidygraph, ggraph, 
+               visNetwork, lubridate, clock,
+               tidyverse, graphlayouts)
+```
+
+
+## Load data
+```{r}
+GAStech_nodes <- read_csv("data/GAStech_email_node.csv")
+GAStech_edges <- read_csv("data/GAStech_email_edge-v2.csv")
+```
+
+
+## Examine data structure
+```{r}
+glimpse(GAStech_edges)
+```
+
+## Wrangling
+
+Data type SentDate should be converted to date. Get information of the day in the week that emails are sent by using wday()
+
+```{r}
+GAStech_edges <- GAStech_edges %>%
+  mutate(SendDate = dmy(SentDate)) %>%
+  mutate(Weekday = wday(SentDate,
+                        label = TRUE,
+                        abbr = FALSE))
+glimpse(GAStech_edges)
+```
+
+## Wrangling attributes
+Filter work related subjects
+Exclude emails sent to self
+Count the numbers of emails as weight
+
+
+```{r}
+GAStech_edges_aggregated <- GAStech_edges %>%
+  filter(MainSubject == "Work related") %>%
+  group_by(source, target, Weekday) %>%
+    summarise(Weight = n()) %>%
+  filter(source!=target) %>%
+  filter(Weight > 1) %>%
+  ungroup()
+
+glimpse(GAStech_edges_aggregated)
+```
+
+## Build graph
+
+## Visualize
+
+Graph is directed from source to target
+
+### Visualize with ggplot
+
+Create a graph object
+```{r}
+GAStech_graph <- tbl_graph(nodes = GAStech_nodes,
+                           edges = GAStech_edges_aggregated, 
+                           directed = TRUE)
+GAStech_graph
+```
+
+### Visualize with visNetwork
+
+Data Preparation
+```{r}
+GAStech_edges_aggregated <- GAStech_edges %>%
+  left_join(GAStech_nodes, by = c("sourceLabel" = "label")) %>%
+  rename(from = id) %>%
+  left_join(GAStech_nodes, by = c("targetLabel" = "label")) %>%
+  rename(to = id) %>%
+  filter(MainSubject == "Work related") %>%
+  group_by(from, to) %>%
+    summarise(weight = n()) %>%
+  filter(from!=to) %>%
+  filter(weight > 1) %>%
+  ungroup()
+```
+Force directed graph: with forces pushing nodes apart and links pulling connected nodes together
+
+```{r}
+visNetwork(GAStech_nodes,
+           GAStech_edges_aggregated) 
+```
+
+# Extract nodes, links and weights from json data
+
+## Load packages
+```{r}
+pacman::p_load(jsonlite,tidygraph,ggraph,visNetwork,tidyverse)
+```
+
+## Import Json file 
+```{r}
+MC1<-fromJSON("data/MC1.json")
+```
+
+## Extract node information
+```{r}
+MC1_nodes <- as_tibble(MC1$nodes) %>% 
+  select(id,type,country)
+
+glimpse(MC1_nodes)
+```
+
+## Extract edge information
+```{r}
+MC1_edges <-as_tibble(MC1$links) %>% 
+  select(source, target, type, weight, key)
+
+glimpse(MC1_edges)
+```
+
