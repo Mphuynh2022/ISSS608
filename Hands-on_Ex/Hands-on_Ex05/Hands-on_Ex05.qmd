@@ -308,3 +308,96 @@ g <- GAStech_graph %>%
 
 g + theme_graph()
 ```
+
+# Building Interactive Network Graph with visNetwork
+
+`visNetwork()` is a R package for network visualization, using vis.js javascript library.
+
+`visNetwork()` function uses a nodes list and edges list to create an interactive graph.
+
+The nodes list must include an *“id”* column, and the edge list must have *“from”* and *“to”* columns.
+The function also plots the labels for the nodes, using the names of the actors from the “label” column in the node list.
+The resulting graph is fun to play around with.
+
+You can move the nodes and the graph will use an algorithm to keep the nodes properly spaced.
+You can also zoom in and out on the plot and move it around to re-center it.
+
+## Data preparation
+```{r}
+GAStech_edges_aggregated <- GAStech_edges %>%
+  left_join(GAStech_nodes, by = c("sourceLabel" = "label")) %>%
+  rename(from = id) %>%
+  left_join(GAStech_nodes, by = c("targetLabel" = "label")) %>%
+  rename(to = id) %>%
+  filter(MainSubject == "Work related") %>%
+  group_by(from, to) %>%
+    summarise(weight = n()) %>%
+  filter(from!=to) %>%
+  filter(weight > 1) %>%
+  ungroup()
+```
+
+```{r}
+glimpse(GAStech_edges_aggregated)
+```
+## Plot the first interative network graph
+```{r}
+visNetwork(GAStech_nodes, 
+           GAStech_edges_aggregated)
+```
+
+## Working with layout
+In the code chunk below, Fruchterman and Reingold layout is used.
+```{r}
+visNetwork(GAStech_nodes,
+           GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") 
+```
+
+## Working with visual attributes - Nodes
+
+`visNetwork()` looks for a field called “group” in the nodes object and colour the nodes according to the values of the group field.
+Rename Department field to group.
+```{r}
+GAStech_nodes <- GAStech_nodes %>%
+  rename(group = Department) 
+```
+
+*visNetwork* shades the nodes by assigning unique colour to each category in the group field.
+```{r}
+visNetwork(GAStech_nodes,
+           GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") %>%
+  visLegend() %>%
+  visLayout(randomSeed = 123)
+```
+
+## Working with visual attributes - Edges
+
+`visEdges()` is used to symbolise the edges:
+- The argument arrows is used to define where to place the arrow.
+- The smooth argument is used to plot the edges using a smooth curve.
+```{r}
+visNetwork(GAStech_nodes,
+           GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") %>%
+  visEdges(arrows = "to", 
+           smooth = list(enabled = TRUE, 
+                         type = "curvedCW")) %>%
+  visLegend() %>%
+  visLayout(randomSeed = 123)
+```
+## Interactivity
+`visOptions()` is used to incorporate interactivity features in the data visualisation.
+
+The argument highlightNearest highlights nearest when clicking a node.
+The argument nodesIdSelection adds an id node selection creating an HTML select element.
+```{r}
+visNetwork(GAStech_nodes,
+           GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") %>%
+  visOptions(highlightNearest = TRUE,
+             nodesIdSelection = TRUE) %>%
+  visLegend() %>%
+  visLayout(randomSeed = 123)
+```

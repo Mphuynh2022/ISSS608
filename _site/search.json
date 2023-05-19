@@ -383,5 +383,47 @@
     "title": "Hands-on Exercise 5",
     "section": "Visualize community",
     "text": "Visualize community\ntidygraph package inherits many of the community detection algorithms imbedded into igraph and makes them available to us, including Edge-betweenness (group_edge_betweenness), Leading eigenvector (group_leading_eigen), Fast-greedy (group_fast_greedy), Louvain (group_louvain), Walktrap (group_walktrap), Label propagation (group_label_prop), InfoMAP (group_infomap), Spinglass (group_spinglass), and Optimal (group_optimal). Some community algorithms are designed to take into account direction or weight, while others ignore it.\nIn the code chunk below group_edge_betweenness() is used.\n\ng <- GAStech_graph %>%\n  mutate(community = as.factor(group_edge_betweenness(weights = Weight, directed = TRUE))) %>%\n  ggraph(layout = \"fr\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = community))  \n\ng + theme_graph()"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#data-preparation",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#data-preparation",
+    "title": "Hands-on Exercise 5",
+    "section": "Data preparation",
+    "text": "Data preparation\n\nGAStech_edges_aggregated <- GAStech_edges %>%\n  left_join(GAStech_nodes, by = c(\"sourceLabel\" = \"label\")) %>%\n  rename(from = id) %>%\n  left_join(GAStech_nodes, by = c(\"targetLabel\" = \"label\")) %>%\n  rename(to = id) %>%\n  filter(MainSubject == \"Work related\") %>%\n  group_by(from, to) %>%\n    summarise(weight = n()) %>%\n  filter(from!=to) %>%\n  filter(weight > 1) %>%\n  ungroup()\n\n\nglimpse(GAStech_edges_aggregated)\n\nRows: 839\nColumns: 3\n$ from   <dbl> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, …\n$ to     <dbl> 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,…\n$ weight <int> 21, 21, 21, 21, 21, 21, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,…"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#plot-the-first-interative-network-graph",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#plot-the-first-interative-network-graph",
+    "title": "Hands-on Exercise 5",
+    "section": "Plot the first interative network graph",
+    "text": "Plot the first interative network graph\n\nvisNetwork(GAStech_nodes, \n           GAStech_edges_aggregated)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-layout",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-layout",
+    "title": "Hands-on Exercise 5",
+    "section": "Working with layout",
+    "text": "Working with layout\nIn the code chunk below, Fruchterman and Reingold layout is used.\n\nvisNetwork(GAStech_nodes,\n           GAStech_edges_aggregated) %>%\n  visIgraphLayout(layout = \"layout_with_fr\")"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-visual-attributes---nodes",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-visual-attributes---nodes",
+    "title": "Hands-on Exercise 5",
+    "section": "Working with visual attributes - Nodes",
+    "text": "Working with visual attributes - Nodes\nvisNetwork() looks for a field called “group” in the nodes object and colour the nodes according to the values of the group field. Rename Department field to group.\n\nGAStech_nodes <- GAStech_nodes %>%\n  rename(group = Department) \n\nvisNetwork shades the nodes by assigning unique colour to each category in the group field.\n\nvisNetwork(GAStech_nodes,\n           GAStech_edges_aggregated) %>%\n  visIgraphLayout(layout = \"layout_with_fr\") %>%\n  visLegend() %>%\n  visLayout(randomSeed = 123)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-visual-attributes---edges",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-visual-attributes---edges",
+    "title": "Hands-on Exercise 5",
+    "section": "Working with visual attributes - Edges",
+    "text": "Working with visual attributes - Edges\nvisEdges() is used to symbolise the edges: - The argument arrows is used to define where to place the arrow. - The smooth argument is used to plot the edges using a smooth curve.\n\nvisNetwork(GAStech_nodes,\n           GAStech_edges_aggregated) %>%\n  visIgraphLayout(layout = \"layout_with_fr\") %>%\n  visEdges(arrows = \"to\", \n           smooth = list(enabled = TRUE, \n                         type = \"curvedCW\")) %>%\n  visLegend() %>%\n  visLayout(randomSeed = 123)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#interactivity",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#interactivity",
+    "title": "Hands-on Exercise 5",
+    "section": "Interactivity",
+    "text": "Interactivity\nvisOptions() is used to incorporate interactivity features in the data visualisation.\nThe argument highlightNearest highlights nearest when clicking a node. The argument nodesIdSelection adds an id node selection creating an HTML select element.\n\nvisNetwork(GAStech_nodes,\n           GAStech_edges_aggregated) %>%\n  visIgraphLayout(layout = \"layout_with_fr\") %>%\n  visOptions(highlightNearest = TRUE,\n             nodesIdSelection = TRUE) %>%\n  visLegend() %>%\n  visLayout(randomSeed = 123)"
   }
 ]
