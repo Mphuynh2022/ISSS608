@@ -2,8 +2,13 @@
 title: "About"
 ---
 
-About this site
+This website is my portfolio to showcase the different exercises that I have done to practice visualization skills and techniques.
 
-```{r}
-1 + 1
+**Hands-on Exercises** are pre-class preparation for our lectures.
+
+**In-Class Exercises** are done during lectures to demonstrate important concepts taught by Prof. Kam Tin Seong.
+
+**Take-home Exercises** are mini projects that allow me to apply the skills I have learnt.
+
+```         
 ```
