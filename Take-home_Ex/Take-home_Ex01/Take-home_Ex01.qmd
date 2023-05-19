@@ -1,0 +1,635 @@
+---
+title: "Take-home Exercise 1"
+author: "Huynh Minh Phuong"
+date: "14 May 2023"
+execute:
+  echo: true 
+  eval: true
+  warning: false
+format:
+  html:
+    code-fold: true
+    code-summary: "Show code"
+---
+
+# Overview
+
+A sample survey of representative residents of City of Engagement located at Country of Nowhere was conducted to collect data related to demographic and spending patterns. This data will be used to assist in community revitalization efforts, including how to allocate city renewal grant.
+
+The objective is to use appropriate static and interactive statistical graphics methods to provide an user-friendly and interactive solution that helps city managers and planners to explore the complex data in an engaging way and reveal hidden patterns.
+
+# Dataset
+
+Two datasets are provided:
+
+-   *Participants.csv*: provides demographic information about the residents
+
+-   *FinancialJournal.csv*: contain information about financial transactions for different expense categories
+
+# Data Preparation
+
+## Install and load packages
+
+```{r}
+pacman::p_load(plotly, ggstatsplot, knitr, patchwork, ggdist, ggthemes,ggridges, tidyverse, pals, viridis, gganimate, reshape2, lubridate, zoo, transformr, ggiraph)
+```
+
+## Import and view datasets
+
+Load demographic data and data summary statistics
+
+```{r}
+demo_info<-read_csv("data/Participants.csv")
+summary(demo_info)
+
+```
+
+View all columns and data type for each column
+
+```{r}
+glimpse(demo_info)
+```
+
+`is.na()` function is also used to confirm that there are no missing values in the *demo_info* dataset.
+
+```{r}
+#Check for mising values
+any(is.na(demo_info))
+
+```
+
+```{r}
+# check unique values and their frequency for each column
+demo_info
+```
+
+Load financial transaction data and check summary statistics
+
+```{r}
+transactions<-read_csv("data/FinancialJournal.csv")
+summary(transactions)
+
+```
+
+View all columns and data type for each column
+
+```{r}
+glimpse(transactions)
+```
+
+Check for missing values
+
+```{r}
+any(is.na(transactions))
+```
+
+## Data Cleaning and Wrangling
+
+Looking at the data summary, we notice a few problems:
+
+### Wrong data type
+
+Data type is character for nominal data (participantId), categorical data (interestGroup in demo_info and category in transactions) and ordinal data (educationLevel in demo_info). We need to use `as.factor()` to convert these attributes to the correct data type. We also need to add order to the educationLevel.
+
+Also the data type is wrong for householdSize in demo_info, we used `as.integer()` to convert householdSize to discrete data.
+
+```{r}
+# Nominal and Categorical data
+demo_info$participantId<-as.factor(demo_info$participantId)
+transactions$participantId<-as.factor(transactions$participantId)
+
+demo_info$educationLevel<-as.factor(demo_info$educationLevel)
+demo_info$interestGroup<- as.factor(demo_info$interestGroup)
+transactions$category<-as.factor(transactions$category)
+
+# Check categories in educationLevel using levels()
+
+levels(demo_info$educationLevel)
+
+# Assign orders to ordinal data educationLevel
+
+demo_info$educationLevel<-factor((demo_info$educationLevel),
+                                 levels=c("Low","HighSchoolOrCollege","Bachelors", "Graduate"))
+
+
+# Discrete data
+
+demo_info$householdSize<-as.integer(demo_info$householdSize)
+```
+
+### Duplicated Data
+
+Duplicated data is detected by select rows with duplicate data for financial journal. Since at each timestamp there can only be one single transaction of the same category and amount, the duplicate data should be excluded from analysis.
+
+```{r}
+#check for duplicates; find all rows with the same values for all columns
+transactions[duplicated(transactions),]
+```
+
+In total, 1113 rows of duplicate data were hidden and excluded from analysis. `distinct()` function is used to keep only unique/distinct rows from a data frame. If there are duplicate rows, only the first row is preserved.
+
+```{r}
+#Remove duplicate rows
+transactions<-transactions %>% distinct()
+
+# Check that duplicates have been removed
+transactions[duplicated(transactions),]
+```
+
+### Convert negative transactions value to positive
+
+```{r}
+transactions$amount <-abs(transactions$amount)
+```
+
+### Extract month from timestamp and get monthly expense data
+
+Since wage and expenses such as shelter are paid monthly and there are only 12 months (3/2022 to 2/2023) in the dataset, only month data is needed from the timestamp column.
+
+```{r}
+#mutate date
+transactions <-transactions %>% 
+  mutate(month=as.yearmon(timestamp, "%Y %m"))
+
+head(transactions)
+```
+
+```{r}
+# Use group by to get monthly expense by participantID, month and category
+
+transactions<-transactions %>%
+  select(participantId,month,category,amount) %>% 
+  group_by(participantId,month,category)%>%
+  summarize(monthly_amt=sum(amount))
+
+transactions
+```
+
+### Convert transaction category to columns
+
+```{r}
+# Put value 0 for missing values, rental adjustment category is not applicable for all participants 
+transactions_amt<-transactions %>% 
+  pivot_wider(
+    names_from=category,
+    values_from=monthly_amt,
+    values_fill = 0)
+
+transactions_amt
+```
+
+### Group Shelter and Rental Adjustment as Rental expense
+
+The actual rental expense should take into account the rental adjustment for an accurate presentation. Rental expense is calculated by the following formula: Rental expense=Shelter - RentAdjustment
+
+We will also get the total spending from combining all expenses.
+
+```{r}
+transactions_amt<-transactions_amt%>% 
+  mutate(Rent=Shelter - RentAdjustment) %>% 
+  mutate(Monthly_spend=sum(Education, Food, Recreation, Rent))
+
+summary(transactions_amt)
+```
+
+### Get median monthly spending
+
+Since Education expense is mostly zero in value, we can exclude Education from analysis and only include education as part of total monthly expenses
+
+```{r}
+median_spend<-transactions_amt %>% 
+ select(participantId, month, Food, Recreation, Rent, Monthly_spend, Wage) %>% 
+  group_by(participantId)%>%
+  summarize(Food=median(Food),
+            Recreation=median(Recreation),
+            Wage=median(Wage),
+            Rent=median(Rent),
+            Monthly_spend=median(Monthly_spend))
+summary(median_spend)
+```
+
+### Remove outliers
+
+```{r}
+# boxplot(median_spend$Food)
+# left skewed distribution
+quartiles <-quantile(median_spend$Food, probs=c(.25,.75))
+IQR<-IQR(median_spend$Food)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+median_spend<-median_spend %>% 
+  filter((Food>=lower) & (Food <=upper))
+# After outlier removal
+#boxplot(median_spend$Food)
+```
+
+```{r}
+# boxplot(median_spend$Recreation)
+# left skewed distribution
+quartiles <-quantile(median_spend$Recreation, probs=c(.25,.75))
+IQR<-IQR(median_spend$Recreation)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+median_spend<-median_spend %>% 
+  filter((Recreation>=lower) & (Recreation <=upper))
+# After outlier removal
+# boxplot(median_spend$Recreation)
+```
+
+```{r}
+# boxplot(median_spend$Rent)
+# left skewed distribution
+quartiles <-quantile(median_spend$Rent, probs=c(.25,.75))
+IQR<-IQR(median_spend$Rent)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+median_spend<-median_spend %>% 
+  filter((Rent>=lower) & (Rent <=upper))
+# After outlier removal
+# boxplot(median_spend$Rent)
+```
+
+```{r}
+# boxplot(median_spend$Wage)
+# left skewed distribution
+quartiles <-quantile(median_spend$Wage, probs=c(.25,.75))
+IQR<-IQR(median_spend$Wage)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+median_spend<-median_spend %>% 
+  filter((Wage>=lower) & (Wage <=upper))
+# After outlier removal
+# boxplot(median_spend$Wage)
+```
+
+```{r}
+# boxplot(median_spend$Monthly_spend)
+# left skewed distribution
+quartiles <-quantile(median_spend$Monthly_spend, probs=c(.25,.75))
+IQR<-IQR(median_spend$Monthly_spend)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+median_spend<-median_spend %>% 
+  filter((Monthly_spend>=lower) & (Monthly_spend <=upper))
+# After outlier removal
+# boxplot(median_spend$Monthly_spend)
+```
+
+### Join tables
+
+In order to understand whether different demographics have difference in spending pattern or financial health, the two tables need to be combined using participantId as key.
+
+```{r}
+combined<-merge(demo_info, median_spend, by ="participantId")
+
+summary(combined)
+```
+
+# Data Visualization
+
+## Demographics of town
+
+### Distribution of Children status and education level and their relationship
+
+Around 30% of the town population have children and household size is relatively small ranging from 1 person to 3 people. Around 50% of the population has graduated from high school or college and only 8% have low education level.
+
+```{r}
+# Distribution of Children Status
+# Distribution of Children Status
+d1<-demo_info %>% 
+  count(haveKids=factor(haveKids)) %>% 
+  mutate(pct=prop.table(n)) %>% 
+  ggplot(aes(x = haveKids, y=n)) +
+  geom_col()+
+  geom_text(aes(x=haveKids, y= n,
+                label=paste0(n,"\n(", round(pct*100,1),"%)"),
+                vjust=-0.5))+
+  ggtitle("Distribution of Children Status")+
+  theme_minimal()+
+  xlab("Children Status")+
+  ylab("Count")+
+  ylim(c(0,850))
+
+# Distribution of Education levels
+d2<-demo_info %>% 
+  count(educationLevel) %>% 
+  mutate(pct=prop.table(n)) %>%
+  arrange(factor(educationLevel)) %>% 
+  ggplot(aes(x = reorder(educationLevel, -n), y=n)) +
+  geom_col()+
+  geom_text(aes(x=educationLevel, y= n,
+                label=paste0(n,"\n(", round(pct*100,1),"%)"),
+                vjust=-0.5))+
+  ggtitle("Distribution of Education Levels")+
+  theme_minimal()+
+  xlab("Education Levels")+
+  ylab("Count")+
+  ylim(c(0,600))+
+  theme(axis.text.x = element_text(angle=10))
+
+d1 + d2
+```
+
+The following hypotheses were formulated to test the hypothesis that there is a relationship between education level and children status: H0: There is no association between education level and children status H1: There is an association between education level and children status We selected a confidence level of 95% and used chi-squared test for confirmatory analysis since education level and children status are categorical data and the observations are independent of one another. Since p value \< 0.05, we can conclude that there is an association between children status and educational level. The group with lower education level is more likely to have children than bachelor and graduate group.
+
+```{r}
+# Chi squared test for relationship between Children Status and Education Level
+d12<-ggbarstats(demo_info,
+               x=haveKids,
+               y=educationLevel,
+               label="both"
+               )+
+  ggtitle("Significant Test of Association between Children Status and Education Level") +
+  xlab("Education Levels")
+d12
+```
+
+## Financial Health
+
+### Wage and Education Levels
+
+We observed right skewed distribution of monthly wage in low, high school college and bachelor education groups while there is a relatively symmetrical distribution of monthly wage in graduate group. We also can see that there seems to be difference in the wage among all education groups.
+
+```{r}
+ggplot(combined,
+       aes(x = Wage, 
+           y = educationLevel, 
+           fill = factor(after_stat(quantile))
+           )) +
+  stat_density_ridges(
+    geom = "density_ridges_gradient",
+    calc_ecdf = TRUE, 
+    quantiles = 4,
+    quantile_lines = TRUE) +
+  scale_fill_viridis_d(name = "Quartiles") +
+  theme_ridges()+
+  ggtitle("Distribution of Wage across different Education Levels")+
+  theme_minimal()+
+  ylab("Education Levels")+
+  xlab("Monthly Wage")
+  
+```
+
+Since the distribution of Wage does not follow normal distribution, we use Kruskal Wallis test to compare the mean monthly wage across different groups. Since p values are \<0.5 for all groups as well as all pairwise comparisons, we can conclude that graduate education has the highest mean monthly wage followed by bachelor, high school or college and low education.
+
+```{r}
+ggbetweenstats(
+  data = combined,
+  x = educationLevel, 
+  y = Wage,
+  type = "np",
+  mean.ci = TRUE, 
+  pairwise.comparisons = TRUE, 
+  pairwise.display = "s",
+  p.adjust.method = "fdr",
+  messages = FALSE
+) + 
+  ggtitle("Compare mean Wage among Education Levels")+
+  xlab("Education Levels")
+
+```
+
+### Wage and interest Group
+
+We can also observe some differences in the mean wages among interest groups D, E, F (order: E\<F\<D) and between group D and B (D\>B) and group D and A (D\>A)
+
+```{r}
+ggbetweenstats(
+  data = combined,
+  x = interestGroup, 
+  y = Wage,
+  type = "np",
+  mean.ci = TRUE, 
+  pairwise.comparisons = TRUE, 
+  pairwise.display = "s",
+  p.adjust.method = "fdr",
+  messages = FALSE,
+  package='pals',
+  palette="polychrome"
+) + 
+  ggtitle("Compare mean Wage among Interest Groups")+
+  xlab("Interest Groups")
+
+```
+
+### Cost of living versus wage
+
+To evaluate the cost of living and wage, intermediate calculation of the percentage of wage spent on all expenses categories (rent, food, recreation and education) was performed. In addition, since rent generally is the biggest expense, the percentage of wage spent on rent is also calculated and studied separately. People with lower wage spend a higher proportion of their wage on expenses.
+
+```{r}
+combined<-combined %>% 
+  mutate(exp_pct=Monthly_spend/Wage*100) %>% 
+  mutate(food_pct=Food/Wage*100) %>% 
+  mutate(rent_pct=Rent/Wage*100) %>% 
+  mutate(recreation_pct=Recreation/Wage*100)
+```
+
+t test was performed to check the relationship between expense and wage. The Pearson correlation coefficient is -0.78 and p value \<0.05, showing moderate negative correlation between expense as a percentage of wage and wage. This means that people with lower wage are more likely to spend a higher proportion of their wage.
+
+```{r}
+p <- ggscatterstats(
+  combined,
+  x = Wage,
+  y = exp_pct,
+  marginal=FALSE
+)+
+  ggtitle("Expense as a percentage of Wage versus Wage")+
+  ylab("Expenses as percentage of Wage")
+p
+```
+
+### Trend in cost of living and wage
+
+Wrangle data to get the demographic data combined with transaction by month
+
+```{r}
+trend<-transactions_amt %>% 
+  group_by(month) %>% 
+  summarise(Food=median(Food),
+            Rent=median(Rent),
+            Recreation=median(Recreation),
+            Wage=median(Wage),
+            Monthly_spend=median(Monthly_spend), 
+            count=n())
+# head(trend)
+```
+
+Remove March record because of abnormally high transaction counts and convert table to long form for plotting.
+
+```{r}
+# Remove Mar 2022 record
+trend<-trend[-1,]
+# Convert table to long form
+trend<-trend %>% 
+  gather("id", "value", 2:6)
+# convert month to date data type for plotting
+trend$month<-as.Date(trend$month)
+# head(trend)
+```
+
+We can see from the plotting of the different transaction categories over time that the median expenses on food and recreation and Wage are trending down while rent is stable.
+
+::: panel-tabset
+## Food
+
+```{r}
+trend %>% 
+  filter(id=='Food')%>% 
+  ggplot(aes(x = month , y = value )) +
+  geom_point()+
+  geom_line()+
+  scale_color_viridis_d()+ 
+  theme_minimal()+
+  ggtitle("Trend of Median expenses on Food over time")+
+  ylab("Amount in $")+
+  xlab("Month")+
+  scale_x_date(date_breaks="2 month", date_labels="%m-%Y")
+```
+
+## Rent
+
+```{r}
+trend %>% 
+  filter(id %in% c('Rent')) %>% 
+  ggplot(aes(x = month , y = value)) +
+  geom_point()+
+  geom_line()+ 
+  theme_minimal()+
+  ggtitle("Trend of Median expenses on Rent over time")+
+  ylab("Amount in $")+
+  xlab("Month")+
+  scale_x_date(date_breaks="2 month", date_labels="%m-%Y")+
+  theme(legend.position="none")
+
+```
+
+## Recreation
+
+```{r}
+trend %>% 
+  filter(id ==c('Recreation'))%>% 
+  ggplot(aes(x = month , y = value)) +
+  geom_point()+
+  geom_line()+
+  scale_color_viridis_d()+ 
+  theme_minimal()+
+  ggtitle("Trend of Median expenses on Recreation over time")+
+  ylab("Amount in $")+
+  xlab("Month")+
+  scale_x_date(date_breaks="2 month", date_labels="%m-%Y")
+```
+
+## Wage
+
+```{r}
+trend %>% 
+  filter(id %in% c('Wage')) %>% 
+  ggplot(aes(x = month , y = value)) +
+  geom_point()+
+  geom_line()+
+  theme_minimal()+
+  ggtitle("Trend of Median expenses on Wage over time")+
+  ylab("Amount in $")+
+  xlab("Month")+
+  scale_x_date(date_breaks="2 month", date_labels="%m-%Y")+
+  theme(legend.position="none")
+
+```
+:::
+
+## Joviality
+
+### Joviality and education levels
+
+We observed bimodal distribution of joviality in group with low or bachelor education with a higher percentage and a trimodal distribution in high school or college and graduate education.
+
+```{r}
+ggplot(demo_info,
+       aes(x = joviality, 
+           y = educationLevel, 
+           fill = factor(after_stat(quantile))
+           )) +
+  stat_density_ridges(
+    geom = "density_ridges_gradient",
+    calc_ecdf = TRUE, 
+    quantiles = 4,
+    quantile_lines = TRUE) +
+  scale_fill_viridis_d(name = "Quartiles") +
+  theme_ridges()+
+  ggtitle("Distribution of Joviality across different Education Levels")+
+  theme_minimal()+
+  ylab("Education Levels")+
+  xlab("Joviality")+
+  geom_vline(aes(xintercept=0.5),
+             color="grey30",
+             linetype="dashed", 
+             linewidth=1)
+  
+```
+
+Since the joviality of all education level groups is not normally distributed, Kruskall Wallis test was performed to test the hypotheses. We chose a confidence level of 95%. We conclude that there is no difference in joviality among education groups
+
+```{r}
+ggbetweenstats(
+  data = demo_info,
+  x = educationLevel, 
+  y = joviality,
+  type = "np",
+  mean.ci = TRUE, 
+  pairwise.comparisons = TRUE, 
+  pairwise.display = "s",
+  p.adjust.method = "fdr",
+  messages = FALSE
+)+
+  ggtitle("Compare mean Joviality across different Education Levels")+
+  ylab("Education Levels")+
+  xlab("Joviality")
+```
+
+### Joviality vs expenses and wage
+
+Joviality is positively correlated with higher percentage of wage spent on expenses but negatively correlated with wage.
+
+```{r}
+j1<-ggscatterstats(
+  data = combined,
+  x = exp_pct,
+  y = joviality,
+  marginal = FALSE,
+  )+  
+  ggtitle("Expense as % of Wage vs Joviality")+
+  xlab("Expenses as percentage of Wage")+
+  ylab("Joviality")
+  
+j2<- ggscatterstats(
+  data = combined,
+  x = Wage,
+  y = joviality,
+  marginal = FALSE,
+  )+
+  ggtitle("Wage vs Joviality")+
+  xlab("Wage")+
+  ylab("Joviality")
+
+j1 + j2
+```
+
+Joviality is also positively correlated to recreation, food and rent expense. In addition, people who spend more of their wage on one expense category tend to spend more on other categories as well.
+
+```{r}
+combined %>% 
+  select(joviality, recreation_pct, food_pct, rent_pct) %>% 
+  ggcorrmat(colors   = c("#B2182B", "white", "#4D4D4D"),
+  matrix.type  = "lower"
+)
+```
