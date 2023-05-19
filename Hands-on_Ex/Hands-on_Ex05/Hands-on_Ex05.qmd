@@ -1,0 +1,310 @@
+---
+title: "Hands-on Exercise 5"
+author: "Huynh Minh Phuong"
+execute:
+  echo: true 
+  eval: true
+  warning: false
+---
+
+#Modelling and Analysing Network 
+
+# Getting Started
+## Load packages 
+
+```{r}
+pacman::p_load(igraph, tidygraph, ggraph, 
+               visNetwork, lubridate, clock,
+               tidyverse, graphlayouts)
+```
+## Import Data
+
+Two datasets: 
+Edge data: GAStech-email_edges.csv which consists of two weeks of 9063 emails correspondances between 55 employees.
+
+```{r}
+GAStech_nodes <- read_csv("data/GAStech_email_node.csv")
+GAStech_edges <- read_csv("data/GAStech_email_edge-v2.csv")
+```
+
+# Dataset
+
+## Data wrangling
+
+### Edge data
+
+Examine the structure of the edge data
+```{r}
+glimpse(GAStech_edges)
+```
+
+::: callout-note
+SentDate is treated as “Character” data type instead of date data type
+:::
+
+Convert data type
+```{r}
+GAStech_edges <- GAStech_edges %>%
+  mutate(SendDate = dmy(SentDate)) %>%
+  mutate(Weekday = wday(SentDate,
+                        label = TRUE,
+                        abbr = FALSE))
+```
+
+::: callout-note
+`lubridate` is an R package that makes it easier to work with dates and times.
+*dmy()* transforms the SentDate to Date data type.
+*wday()* returns the day of the week 
+:::
+
+View data after modification
+```{r}
+glimpse(GAStech_edges)
+```
+
+Let's aggregate the individual by date, senders, receivers, main subject and day of the week.
+
+```{r}
+GAStech_edges_aggregated <- GAStech_edges %>%
+  filter(MainSubject == "Work related") %>%
+  group_by(source, target, Weekday) %>%
+    summarise(Weight = n()) %>%
+  filter(source!=target) %>%
+  filter(Weight > 1) %>%
+  ungroup()
+```
+View data after aggregation
+```{r}
+glimpse(GAStech_edges_aggregated)
+```
+# Create network using *tidygraph*
+
+`tbl_graph()` creates a tbl_graph network object from nodes and edges data.
+`as_tbl_graph()` converts network data and objects to a tbl_graph network
+
+## Create network object
+```{r}
+GAStech_graph <- tbl_graph(nodes = GAStech_nodes,
+                           edges = GAStech_edges_aggregated, 
+                           directed = TRUE)
+```
+
+## View the tbl_graph network object 
+The output above reveals that GAStech_graph is a tbl_graph object with 54 nodes and 4541 edges
+It states that the Node Data is active. The notion of an active tibble within a tbl_graph object makes it possible to manipulate the data in one tibble at a time.
+```{r}
+GAStech_graph
+```
+
+## Change active object
+
+Activate the edges and rearrange the rows in the edges tibble to list those with the highest “weight” first, we could use `activate()` and then `arrange()`.
+
+```{r}
+GAStech_graph %>%
+  activate(edges) %>%
+  arrange(desc(Weight))
+```
+
+# Plotting Static Network Graphs with ggraph package
+
+## Plot a basic network graph
+
+```{r}
+ggraph(GAStech_graph) +
+  geom_edge_link() +
+  geom_node_point()
+```
+
+::: callout-note
+`ggraph()` can use either an igraph object or a tbl_graph object.
+::: 
+
+## Change default network graph theme
+
+Use `theme_graph()` to remove the x and y axes
+```{r}
+g <- ggraph(GAStech_graph) + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes())
+
+g + theme_graph()
+```
+
+## Change color of the plot
+`theme_graph()` makes it easy to change the coloring of the plot. 
+
+```{r}
+g <- ggraph(GAStech_graph) + 
+  geom_edge_link(aes(colour = 'grey50')) +
+  geom_node_point(aes(colour = 'grey40'))
+
+g + theme_graph(background = 'grey10',
+                text_colour = 'white')
+```
+
+## Working with ggraph's layouts
+
+*ggraph* support many layout for standard used, they are: star, circle, nicely (default), dh, gem, graphopt, grid, mds, spahere, randomly, fr, kk, drl and lgl.
+
+### Fruchterman and Reingold layout.
+```{r}
+g <- ggraph(GAStech_graph, 
+            layout = "fr") +
+  geom_edge_link(aes()) +
+  geom_node_point(aes())
+
+g + theme_graph()
+```
+## Modify network nodes
+
+### Colour each node by referring to their respective departments.
+
+```{r}
+g <- ggraph(GAStech_graph, 
+            layout = "nicely") + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes(colour = Department, 
+                      size = 3))
+
+g + theme_graph()
+```
+::: callout-note
+`geom_node_point` is equivalent in functionality to `geo_point` of *ggplot2*. It allows for simple plotting of nodes in different shapes, colours and sizes. In the codes chunks above colour and size are used. 
+:::
+
+## Modify edges
+Thickness of the edges will be mapped with the Weight variable.
+```{r}
+g <- ggraph(GAStech_graph, 
+            layout = "nicely") +
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department), 
+                  size = 3)
+
+g + theme_graph()
+```
+::: callout-note
+`geom_edge_link` draws edges in the simplest way - as straight lines between the start and end nodes. But, it can do more that that. In the example above, argument width is used to map the width of the line in proportional to the Weight attribute and argument alpha is used to introduce opacity on the line.
+:::
+# Create facet graphs
+There are three functions in *ggraph* to implement faceting, they are:
+`facet_nodes()` whereby edges are only draw in a panel if both terminal nodes are present here,
+`facet_edges()` whereby nodes are always drawn in al panels even if the node data contains an attribute named the same as the one used for the edge facetting, and
+`facet_graph()` faceting on two variables simultaneously.
+
+## Working with `facet_edge()`
+
+```{r}
+set_graph_style()
+
+g <- ggraph(GAStech_graph, 
+            layout = "nicely") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department), 
+                  size = 2)
+
+g + facet_edges(~Weekday)
+```
+Use `theme()` to change the position of the legend.
+```{r}
+set_graph_style()
+
+g <- ggraph(GAStech_graph, 
+            layout = "nicely") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department), 
+                  size = 2) +
+  theme(legend.position = 'bottom')
+  
+g + facet_edges(~Weekday)
+```
+
+Add frame to each facet.
+
+```{r}
+set_graph_style() 
+
+g <- ggraph(GAStech_graph, 
+            layout = "nicely") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department), 
+                  size = 2)
+  
+g + facet_edges(~Weekday) +
+  th_foreground(foreground = "grey80",  
+                border = TRUE) +
+  theme(legend.position = 'bottom')
+```
+
+## Working with `facet_nodes()`
+```{r}
+set_graph_style()
+
+g <- ggraph(GAStech_graph, 
+            layout = "nicely") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department), 
+                  size = 2)
+  
+g + facet_nodes(~Department)+
+  th_foreground(foreground = "grey80",  
+                border = TRUE) +
+  theme(legend.position = 'bottom')
+```
+
+# Network Metrics Analysis
+## Compute and visualize centrality indices
+`mutate()` of *dplyr* is used to perform the computation.
+the algorithm used, on the other hand, is the `centrality_betweenness()` of *tidygraph*.
+
+```{r}
+g <- GAStech_graph %>%
+  mutate(betweenness_centrality = centrality_betweenness()) %>%
+  ggraph(layout = "fr") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department,
+            size=betweenness_centrality))
+g + theme_graph()
+```
+
+From *ggraph v2.0* onward *tidygraph* algorithms such as centrality measures can be accessed directly in *ggraph* calls. This means that it is no longer necessary to precompute and store derived node and edge centrality measures on the graph in order to use them in a plot.
+```{r}
+g <- GAStech_graph %>%
+  ggraph(layout = "fr") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department, 
+                      size = centrality_betweenness()))
+g + theme_graph()
+```
+## Visualize community
+
+*tidygraph* package inherits many of the community detection algorithms imbedded into igraph and makes them available to us, including Edge-betweenness (group_edge_betweenness), Leading eigenvector (group_leading_eigen), Fast-greedy (group_fast_greedy), Louvain (group_louvain), Walktrap (group_walktrap), Label propagation (group_label_prop), InfoMAP (group_infomap), Spinglass (group_spinglass), and Optimal (group_optimal). Some community algorithms are designed to take into account direction or weight, while others ignore it.
+
+In the code chunk below `group_edge_betweenness()` is used. 
+
+```{r}
+g <- GAStech_graph %>%
+  mutate(community = as.factor(group_edge_betweenness(weights = Weight, directed = TRUE))) %>%
+  ggraph(layout = "fr") + 
+  geom_edge_link(aes(width=Weight), 
+                 alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = community))  
+
+g + theme_graph()
+```

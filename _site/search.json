@@ -257,5 +257,131 @@
     "title": "Take-home Exercise 1",
     "section": "Joviality",
     "text": "Joviality\n\nJoviality and education levels\nWe observed bimodal distribution of joviality in group with low or bachelor education with a higher percentage and a trimodal distribution in high school or college and graduate education.\n\n\nShow code\nggplot(demo_info,\n       aes(x = joviality, \n           y = educationLevel, \n           fill = factor(after_stat(quantile))\n           )) +\n  stat_density_ridges(\n    geom = \"density_ridges_gradient\",\n    calc_ecdf = TRUE, \n    quantiles = 4,\n    quantile_lines = TRUE) +\n  scale_fill_viridis_d(name = \"Quartiles\") +\n  theme_ridges()+\n  ggtitle(\"Distribution of Joviality across different Education Levels\")+\n  theme_minimal()+\n  ylab(\"Education Levels\")+\n  xlab(\"Joviality\")+\n  geom_vline(aes(xintercept=0.5),\n             color=\"grey30\",\n             linetype=\"dashed\", \n             linewidth=1)\n\n\n\n\n\nSince the joviality of all education level groups is not normally distributed, Kruskall Wallis test was performed to test the hypotheses. We chose a confidence level of 95%. We conclude that there is no difference in joviality among education groups\n\n\nShow code\nggbetweenstats(\n  data = demo_info,\n  x = educationLevel, \n  y = joviality,\n  type = \"np\",\n  mean.ci = TRUE, \n  pairwise.comparisons = TRUE, \n  pairwise.display = \"s\",\n  p.adjust.method = \"fdr\",\n  messages = FALSE\n)+\n  ggtitle(\"Compare mean Joviality across different Education Levels\")+\n  ylab(\"Education Levels\")+\n  xlab(\"Joviality\")\n\n\n\n\n\n\n\nJoviality vs expenses and wage\nJoviality is positively correlated with higher percentage of wage spent on expenses but negatively correlated with wage.\n\n\nShow code\nj1<-ggscatterstats(\n  data = combined,\n  x = exp_pct,\n  y = joviality,\n  marginal = FALSE,\n  )+  \n  ggtitle(\"Expense as % of Wage vs Joviality\")+\n  xlab(\"Expenses as percentage of Wage\")+\n  ylab(\"Joviality\")\n  \nj2<- ggscatterstats(\n  data = combined,\n  x = Wage,\n  y = joviality,\n  marginal = FALSE,\n  )+\n  ggtitle(\"Wage vs Joviality\")+\n  xlab(\"Wage\")+\n  ylab(\"Joviality\")\n\nj1 + j2\n\n\n\n\n\nJoviality is also positively correlated to recreation, food and rent expense. In addition, people who spend more of their wage on one expense category tend to spend more on other categories as well.\n\n\nShow code\ncombined %>% \n  select(joviality, recreation_pct, food_pct, rent_pct) %>% \n  ggcorrmat(colors   = c(\"#B2182B\", \"white\", \"#4D4D4D\"),\n  matrix.type  = \"lower\"\n)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html",
+    "title": "Hands-on Exercise 5",
+    "section": "",
+    "text": "#Modelling and Analysing Network"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#load-packages",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#load-packages",
+    "title": "Hands-on Exercise 5",
+    "section": "Load packages",
+    "text": "Load packages\n\npacman::p_load(igraph, tidygraph, ggraph, \n               visNetwork, lubridate, clock,\n               tidyverse, graphlayouts)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#import-data",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#import-data",
+    "title": "Hands-on Exercise 5",
+    "section": "Import Data",
+    "text": "Import Data\nTwo datasets: Edge data: GAStech-email_edges.csv which consists of two weeks of 9063 emails correspondances between 55 employees.\n\nGAStech_nodes <- read_csv(\"data/GAStech_email_node.csv\")\nGAStech_edges <- read_csv(\"data/GAStech_email_edge-v2.csv\")"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#review-imported-data",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#review-imported-data",
+    "title": "Hands-on Exercise 5",
+    "section": "Review imported data",
+    "text": "Review imported data\nExamine the structure of the data\n\nglimpse(GAStech_edges)\n\nRows: 9,063\nColumns: 8\n$ source      <dbl> 43, 43, 44, 44, 44, 44, 44, 44, 44, 44, 44, 44, 26, 26, 26…\n$ target      <dbl> 41, 40, 51, 52, 53, 45, 44, 46, 48, 49, 47, 54, 27, 28, 29…\n$ SentDate    <chr> \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\"…\n$ SentTime    <time> 08:39:00, 08:39:00, 08:58:00, 08:58:00, 08:58:00, 08:58:0…\n$ Subject     <chr> \"GT-SeismicProcessorPro Bug Report\", \"GT-SeismicProcessorP…\n$ MainSubject <chr> \"Work related\", \"Work related\", \"Work related\", \"Work rela…\n$ sourceLabel <chr> \"Sven.Flecha\", \"Sven.Flecha\", \"Kanon.Herrero\", \"Kanon.Herr…\n$ targetLabel <chr> \"Isak.Baza\", \"Lucas.Alcazar\", \"Felix.Resumir\", \"Hideki.Coc…\n\n\n\n\n\n\n\n\nNote\n\n\n\nSentDate is treated as “Character” data type instead of date data type"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#data-wrangling",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#data-wrangling",
+    "title": "Hands-on Exercise 5",
+    "section": "Data wrangling",
+    "text": "Data wrangling\n\nEdge data\nExamine the structure of the edge data\n\nglimpse(GAStech_edges)\n\nRows: 9,063\nColumns: 8\n$ source      <dbl> 43, 43, 44, 44, 44, 44, 44, 44, 44, 44, 44, 44, 26, 26, 26…\n$ target      <dbl> 41, 40, 51, 52, 53, 45, 44, 46, 48, 49, 47, 54, 27, 28, 29…\n$ SentDate    <chr> \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\"…\n$ SentTime    <time> 08:39:00, 08:39:00, 08:58:00, 08:58:00, 08:58:00, 08:58:0…\n$ Subject     <chr> \"GT-SeismicProcessorPro Bug Report\", \"GT-SeismicProcessorP…\n$ MainSubject <chr> \"Work related\", \"Work related\", \"Work related\", \"Work rela…\n$ sourceLabel <chr> \"Sven.Flecha\", \"Sven.Flecha\", \"Kanon.Herrero\", \"Kanon.Herr…\n$ targetLabel <chr> \"Isak.Baza\", \"Lucas.Alcazar\", \"Felix.Resumir\", \"Hideki.Coc…\n\n\n\n\n\n\n\n\nNote\n\n\n\nSentDate is treated as “Character” data type instead of date data type\n\n\nConvert data type\n\nGAStech_edges <- GAStech_edges %>%\n  mutate(SendDate = dmy(SentDate)) %>%\n  mutate(Weekday = wday(SentDate,\n                        label = TRUE,\n                        abbr = FALSE))\n\n\n\n\n\n\n\nNote\n\n\n\nlubridate is an R package that makes it easier to work with dates and times. dmy() transforms the SentDate to Date data type. wday() returns the day of the week\n\n\nView data after modification\n\nglimpse(GAStech_edges)\n\nRows: 9,063\nColumns: 10\n$ source      <dbl> 43, 43, 44, 44, 44, 44, 44, 44, 44, 44, 44, 44, 26, 26, 26…\n$ target      <dbl> 41, 40, 51, 52, 53, 45, 44, 46, 48, 49, 47, 54, 27, 28, 29…\n$ SentDate    <chr> \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\", \"6/1/2014\"…\n$ SentTime    <time> 08:39:00, 08:39:00, 08:58:00, 08:58:00, 08:58:00, 08:58:0…\n$ Subject     <chr> \"GT-SeismicProcessorPro Bug Report\", \"GT-SeismicProcessorP…\n$ MainSubject <chr> \"Work related\", \"Work related\", \"Work related\", \"Work rela…\n$ sourceLabel <chr> \"Sven.Flecha\", \"Sven.Flecha\", \"Kanon.Herrero\", \"Kanon.Herr…\n$ targetLabel <chr> \"Isak.Baza\", \"Lucas.Alcazar\", \"Felix.Resumir\", \"Hideki.Coc…\n$ SendDate    <date> 2014-01-06, 2014-01-06, 2014-01-06, 2014-01-06, 2014-01-0…\n$ Weekday     <ord> Friday, Friday, Friday, Friday, Friday, Friday, Friday, Fr…\n\n\nLet’s aggregate the individual by date, senders, receivers, main subject and day of the week.\n\nGAStech_edges_aggregated <- GAStech_edges %>%\n  filter(MainSubject == \"Work related\") %>%\n  group_by(source, target, Weekday) %>%\n    summarise(Weight = n()) %>%\n  filter(source!=target) %>%\n  filter(Weight > 1) %>%\n  ungroup()\n\nView data after aggregation\n\nglimpse(GAStech_edges_aggregated)\n\nRows: 1,372\nColumns: 4\n$ source  <dbl> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,…\n$ target  <dbl> 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6,…\n$ Weekday <ord> Sunday, Monday, Tuesday, Wednesday, Friday, Sunday, Monday, Tu…\n$ Weight  <int> 5, 2, 3, 4, 6, 5, 2, 3, 4, 6, 5, 2, 3, 4, 6, 5, 2, 3, 4, 6, 5,…"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#create-network-object",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#create-network-object",
+    "title": "Hands-on Exercise 5",
+    "section": "Create network object",
+    "text": "Create network object\n\nGAStech_graph <- tbl_graph(nodes = GAStech_nodes,\n                           edges = GAStech_edges_aggregated, \n                           directed = TRUE)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#view-the-tbl_graph-network-object",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#view-the-tbl_graph-network-object",
+    "title": "Hands-on Exercise 5",
+    "section": "View the tbl_graph network object",
+    "text": "View the tbl_graph network object\nThe output above reveals that GAStech_graph is a tbl_graph object with 54 nodes and 4541 edges It states that the Node Data is active. The notion of an active tibble within a tbl_graph object makes it possible to manipulate the data in one tibble at a time.\n\nGAStech_graph\n\n# A tbl_graph: 54 nodes and 1372 edges\n#\n# A directed multigraph with 1 component\n#\n# A tibble: 54 × 4\n     id label               Department     Title                                \n  <dbl> <chr>               <chr>          <chr>                                \n1     1 Mat.Bramar          Administration Assistant to CEO                     \n2     2 Anda.Ribera         Administration Assistant to CFO                     \n3     3 Rachel.Pantanal     Administration Assistant to CIO                     \n4     4 Linda.Lagos         Administration Assistant to COO                     \n5     5 Ruscella.Mies.Haber Administration Assistant to Engineering Group Manag…\n6     6 Carla.Forluniau     Administration Assistant to IT Group Manager        \n# ℹ 48 more rows\n#\n# A tibble: 1,372 × 4\n   from    to Weekday Weight\n  <int> <int> <ord>    <int>\n1     1     2 Sunday       5\n2     1     2 Monday       2\n3     1     2 Tuesday      3\n# ℹ 1,369 more rows"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#change-active-object",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#change-active-object",
+    "title": "Hands-on Exercise 5",
+    "section": "Change active object",
+    "text": "Change active object\nActivate the edges and rearrange the rows in the edges tibble to list those with the highest “weight” first, we could use activate() and then arrange().\n\nGAStech_graph %>%\n  activate(edges) %>%\n  arrange(desc(Weight))\n\n# A tbl_graph: 54 nodes and 1372 edges\n#\n# A directed multigraph with 1 component\n#\n# A tibble: 1,372 × 4\n   from    to Weekday  Weight\n  <int> <int> <ord>     <int>\n1    40    41 Saturday     13\n2    41    43 Monday       11\n3    35    31 Tuesday      10\n4    40    41 Monday       10\n5    40    43 Monday       10\n6    36    32 Sunday        9\n# ℹ 1,366 more rows\n#\n# A tibble: 54 × 4\n     id label           Department     Title           \n  <dbl> <chr>           <chr>          <chr>           \n1     1 Mat.Bramar      Administration Assistant to CEO\n2     2 Anda.Ribera     Administration Assistant to CFO\n3     3 Rachel.Pantanal Administration Assistant to CIO\n# ℹ 51 more rows"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#plot-a-basic-network-graph",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#plot-a-basic-network-graph",
+    "title": "Hands-on Exercise 5",
+    "section": "Plot a basic network graph",
+    "text": "Plot a basic network graph\n\nggraph(GAStech_graph) +\n  geom_edge_link() +\n  geom_node_point()\n\n\n\n\n\n\n\n\n\n\nNote\n\n\n\nggraph() can use either an igraph object or a tbl_graph object."
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#change-default-network-graph-theme",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#change-default-network-graph-theme",
+    "title": "Hands-on Exercise 5",
+    "section": "Change default network graph theme",
+    "text": "Change default network graph theme\nUse theme_graph() to remove the x and y axes\n\ng <- ggraph(GAStech_graph) + \n  geom_edge_link(aes()) +\n  geom_node_point(aes())\n\ng + theme_graph()"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#change-color-of-the-plot",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#change-color-of-the-plot",
+    "title": "Hands-on Exercise 5",
+    "section": "Change color of the plot",
+    "text": "Change color of the plot\ntheme_graph() makes it easy to change the coloring of the plot.\n\ng <- ggraph(GAStech_graph) + \n  geom_edge_link(aes(colour = 'grey50')) +\n  geom_node_point(aes(colour = 'grey40'))\n\ng + theme_graph(background = 'grey10',\n                text_colour = 'white')"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-ggraphs-layouts",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-ggraphs-layouts",
+    "title": "Hands-on Exercise 5",
+    "section": "Working with ggraph’s layouts",
+    "text": "Working with ggraph’s layouts\nggraph support many layout for standard used, they are: star, circle, nicely (default), dh, gem, graphopt, grid, mds, spahere, randomly, fr, kk, drl and lgl.\n\nFruchterman and Reingold layout.\n\ng <- ggraph(GAStech_graph, \n            layout = \"fr\") +\n  geom_edge_link(aes()) +\n  geom_node_point(aes())\n\ng + theme_graph()"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#modify-network-nodes",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#modify-network-nodes",
+    "title": "Hands-on Exercise 5",
+    "section": "Modify network nodes",
+    "text": "Modify network nodes\n\nColour each node by referring to their respective departments.\n\ng <- ggraph(GAStech_graph, \n            layout = \"nicely\") + \n  geom_edge_link(aes()) +\n  geom_node_point(aes(colour = Department, \n                      size = 3))\n\ng + theme_graph()\n\n\n\n\n\n\n\n\n\n\nNote\n\n\n\ngeom_node_point is equivalent in functionality to geo_point of ggplot2. It allows for simple plotting of nodes in different shapes, colours and sizes. In the codes chunks above colour and size are used."
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#modify-edges",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#modify-edges",
+    "title": "Hands-on Exercise 5",
+    "section": "Modify edges",
+    "text": "Modify edges\nThickness of the edges will be mapped with the Weight variable.\n\ng <- ggraph(GAStech_graph, \n            layout = \"nicely\") +\n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department), \n                  size = 3)\n\ng + theme_graph()\n\n\n\n\n\n\n\n\n\n\nNote\n\n\n\ngeom_edge_link draws edges in the simplest way - as straight lines between the start and end nodes. But, it can do more that that. In the example above, argument width is used to map the width of the line in proportional to the Weight attribute and argument alpha is used to introduce opacity on the line."
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-facet_edge",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-facet_edge",
+    "title": "Hands-on Exercise 5",
+    "section": "Working with facet_edge()",
+    "text": "Working with facet_edge()\n\nset_graph_style()\n\ng <- ggraph(GAStech_graph, \n            layout = \"nicely\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department), \n                  size = 2)\n\ng + facet_edges(~Weekday)\n\n\n\n\nUse theme() to change the position of the legend.\n\nset_graph_style()\n\ng <- ggraph(GAStech_graph, \n            layout = \"nicely\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department), \n                  size = 2) +\n  theme(legend.position = 'bottom')\n  \ng + facet_edges(~Weekday)\n\n\n\n\nAdd frame to each facet.\n\nset_graph_style() \n\ng <- ggraph(GAStech_graph, \n            layout = \"nicely\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department), \n                  size = 2)\n  \ng + facet_edges(~Weekday) +\n  th_foreground(foreground = \"grey80\",  \n                border = TRUE) +\n  theme(legend.position = 'bottom')"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-facet_nodes",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#working-with-facet_nodes",
+    "title": "Hands-on Exercise 5",
+    "section": "Working with facet_nodes()",
+    "text": "Working with facet_nodes()\n\nset_graph_style()\n\ng <- ggraph(GAStech_graph, \n            layout = \"nicely\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department), \n                  size = 2)\n  \ng + facet_nodes(~Department)+\n  th_foreground(foreground = \"grey80\",  \n                border = TRUE) +\n  theme(legend.position = 'bottom')"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#compute-and-visualize-centrality-indices",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#compute-and-visualize-centrality-indices",
+    "title": "Hands-on Exercise 5",
+    "section": "Compute and visualize centrality indices",
+    "text": "Compute and visualize centrality indices\nmutate() of dplyr is used to perform the computation. the algorithm used, on the other hand, is the centrality_betweenness() of tidygraph.\n\ng <- GAStech_graph %>%\n  mutate(betweenness_centrality = centrality_betweenness()) %>%\n  ggraph(layout = \"fr\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department,\n            size=betweenness_centrality))\ng + theme_graph()\n\n\n\n\nFrom ggraph v2.0 onward tidygraph algorithms such as centrality measures can be accessed directly in ggraph calls. This means that it is no longer necessary to precompute and store derived node and edge centrality measures on the graph in order to use them in a plot.\n\ng <- GAStech_graph %>%\n  ggraph(layout = \"fr\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = Department, \n                      size = centrality_betweenness()))\ng + theme_graph()"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#visualize-community",
+    "href": "Hands-on_Ex/Hands-on_Ex05/Hands-on_Ex05.html#visualize-community",
+    "title": "Hands-on Exercise 5",
+    "section": "Visualize community",
+    "text": "Visualize community\ntidygraph package inherits many of the community detection algorithms imbedded into igraph and makes them available to us, including Edge-betweenness (group_edge_betweenness), Leading eigenvector (group_leading_eigen), Fast-greedy (group_fast_greedy), Louvain (group_louvain), Walktrap (group_walktrap), Label propagation (group_label_prop), InfoMAP (group_infomap), Spinglass (group_spinglass), and Optimal (group_optimal). Some community algorithms are designed to take into account direction or weight, while others ignore it.\nIn the code chunk below group_edge_betweenness() is used.\n\ng <- GAStech_graph %>%\n  mutate(community = as.factor(group_edge_betweenness(weights = Weight, directed = TRUE))) %>%\n  ggraph(layout = \"fr\") + \n  geom_edge_link(aes(width=Weight), \n                 alpha=0.2) +\n  scale_edge_width(range = c(0.1, 5)) +\n  geom_node_point(aes(colour = community))  \n\ng + theme_graph()"
   }
 ]
