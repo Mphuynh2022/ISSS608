@@ -425,5 +425,40 @@
     "title": "Hands-on Exercise 5",
     "section": "Interactivity",
     "text": "Interactivity\nvisOptions() is used to incorporate interactivity features in the data visualisation.\nThe argument highlightNearest highlights nearest when clicking a node. The argument nodesIdSelection adds an id node selection creating an HTML select element.\n\nvisNetwork(GAStech_nodes,\n           GAStech_edges_aggregated) %>%\n  visIgraphLayout(layout = \"layout_with_fr\") %>%\n  visOptions(highlightNearest = TRUE,\n             nodesIdSelection = TRUE) %>%\n  visLegend() %>%\n  visLayout(randomSeed = 123)"
+  },
+  {
+    "objectID": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#load-packages",
+    "href": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#load-packages",
+    "title": "Take Home Exercise 02",
+    "section": "Load packages",
+    "text": "Load packages\n\npacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite)"
+  },
+  {
+    "objectID": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#import-data",
+    "href": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#import-data",
+    "title": "Take Home Exercise 02",
+    "section": "Import data",
+    "text": "Import data"
+  },
+  {
+    "objectID": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#deal-with-na-if-cannot-deduce-remove",
+    "href": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#deal-with-na-if-cannot-deduce-remove",
+    "title": "Take Home Exercise 02",
+    "section": "Deal with NA; if cannot deduce, remove",
+    "text": "Deal with NA; if cannot deduce, remove"
+  },
+  {
+    "objectID": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#link-table-same-target-to-source-with-multiple-links---aggregate-to-get-weight-no-of-time-the-target-links-with-the-source",
+    "href": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#link-table-same-target-to-source-with-multiple-links---aggregate-to-get-weight-no-of-time-the-target-links-with-the-source",
+    "title": "Take Home Exercise 02",
+    "section": "link table: same target to source with multiple links -> aggregate to get weight (no of time the target links with the source)",
+    "text": "link table: same target to source with multiple links -> aggregate to get weight (no of time the target links with the source)"
+  },
+  {
+    "objectID": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#directed-link",
+    "href": "Take-home_Ex/Take-home_Ex02/Take-home_Ex02.html#directed-link",
+    "title": "Take Home Exercise 02",
+    "section": "directed link",
+    "text": "directed link"
   }
 ]
