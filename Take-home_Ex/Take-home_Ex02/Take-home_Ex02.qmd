@@ -1,0 +1,24 @@
+---
+title: "Take Home Exercise 02"
+author: "Huynh Minh Phuong"
+---
+
+# Overview
+
+# Data set
+
+## Load packages
+
+```{r}
+pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite)
+```
+
+## Import data
+
+
+## Deal with NA; if cannot deduce, remove 
+
+## link table: same target to source with multiple links -> aggregate to get weight (no of time the target links with the source)
+## directed link
+
+# Data Visualization
