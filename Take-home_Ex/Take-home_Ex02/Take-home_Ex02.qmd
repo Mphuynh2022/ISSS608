@@ -15,10 +15,60 @@ pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lub
 
 ## Import data
 
+```{r}
+MC2<-fromJSON("data/mc2_challenge_graph.json")
+```
 
+```{r}
+carp<-fromJSON("data/bundles/carp.json")
+```
+## Extract node information
+```{r}
+MC2_nodes <- as_tibble(MC2$nodes) %>% 
+  select(id, shpcountry,rcvcountry)
+glimpse(MC2_nodes)
+```
+```{r}
+MC2_nodes<-
+```
+
+```{r}
+MC2_edges <-as_tibble(MC2$links) %>% 
+  select(source, target, arrivaldate,hscode,weightkg,volumeteu,valueofgoodsusd,valueofgoods_omu)
+glimpse(MC2_edges)
+```
+
+Convert arrival date data type to date
+```{r}
+MC2_edges<-MC2_edges %>% 
+  mutate(arrivaldate = ymd(arrivaldate)) %>% 
+  mutate(Weekday = wday(arrivaldate,
+                        label = TRUE,
+                        abbr = FALSE))
+glimpse(MC2_edges)
+```
+Convert source, target, hscode data to categorical/factor. 
+```{r}
+MC2_edges$source<-as.factor(MC2_edges$source)
+MC2_edges$target<-as.factor(MC2_edges$target)
+MC2_edges$hscode<-as.factor(MC2_edges$hscode)
+summary(MC2_edges)
+```
+
+Calculate the weight by using frequency count
+```{r}
+MC2_edges_aggregated<-MC2_edges %>% 
+  group_by(source, target, hscode) %>% 
+  summarise(weight=n())
+glimpse(MC2_edges_aggregated)
+```
 ## Deal with NA; if cannot deduce, remove 
 
-## link table: same target to source with multiple links -> aggregate to get weight (no of time the target links with the source)
+## link table: same target to source with multiple links -> aggregate to get weight (no of time the target links with the source), 
 ## directed link
+
+## create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view 
+
+#2000 links: take out the very high frequency links, only take out top 50 source and top 50 target
 
 # Data Visualization

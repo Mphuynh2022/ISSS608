@@ -31,6 +31,10 @@ GAStech_edges <- read_csv("data/GAStech_email_edge-v2.csv")
 # Dataset
 
 ## Data wrangling
+### Node data
+```{r}
+glimpse(GAStech_nodes)
+```
 
 ### Edge data
 
