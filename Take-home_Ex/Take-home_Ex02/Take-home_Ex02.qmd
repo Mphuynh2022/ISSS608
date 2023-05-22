@@ -1,13 +1,59 @@
 ---
 title: "Take Home Exercise 02"
 author: "Huynh Minh Phuong"
+execute:
+  echo: true
+  eval: true
+  warning: false
 ---
 
 # Overview
 
+Oceanus has enlisted FishEye International's assistance in identifying potentially illegal fishing companies. FishEye's analysts were provided with import/export data for Oceanus' marine and fishing sectors, but the data was incomplete. To aid their analysis, FishEye transformed the trade data into a knowledge graph to understand business relationships, specifically to combat illegal, unreported, and unregulated (IUU) fishing and protect affected marine species. While node-link diagrams provided a high-level overview of the knowledge graph, FishEye now seeks visualizations that offer more detailed patterns about entities within the graph. The analysis consists of two main parts.
+
+Firstly, FishEye aims to visualize temporal patterns to determine if companies engaging in illegal fishing activities have reemerged under different names after shutting down. They seek assistance in comparing the activities of these companies over time.
+
+Secondly, FishEye has employed various tools, including artificial intelligence, to reason on the knowledge graph and propose additional links to expand the dataset. They have presented 12 groups of link suggestions and require aid in evaluating the reliability of these tools for completing the graph. FishEye is particularly interested in identifying new temporal patterns or anomalies that arise when new links are added.
+
+We aim to use visual analytics to help FishEye identify companies that may be engaged in illegal fishing.
+
 # Data set
 
+The graph is structured in a JSON format designed to align with d3's node-link format and ensure compatibility with networkx.node_link_graph. At the top level, it consists of a dictionary containing graph-level properties, indicated by keys such as "directed," "multigraph," and "graph." The "nodes" and "links" keys each hold a dictionary of nodes and links, respectively.
+
+For nodes, the entries must include a unique "id" key for each node. As for links, they consist of "source" and "target" keys, referring to the node id values. Any additional keys provided within the node and link dictionaries serve as attributes for those specific nodes or links.
+
+Node Attributes:
+
+-   id -- Name of the company that originated (or received) the shipment
+
+-   shpcountry -- Country the company most often associated with when shipping
+
+-   rcvcountry -- Country the company most often associated with when receiving
+
+-   dataset -- Always 'MC2'
+
+Edge Attributes:
+
+-   arrivaldate -- Date the shipment arrived at port in YYYY-MM-DD format.
+
+-   hscode -- Harmonized System code for the shipment. Can be joined with the hscodes table to get additional details.
+
+-   valueofgoods_omu -- Customs-declared value of the total shipment, in Oceanus Monetary Units (OMU)
+
+-   volumeteu -- The volume of the shipment in 'Twenty-foot equivalent units', roughly how many 20-foot standard containers would be required. (Actual number of containers may have been different as there are 20ft and 40ft standard containers and tankers that do not use containers)
+
+-   weightkg -- The weight of the shipment in kilograms (if known)
+
+-   dataset -- Always 'MC2'
+
+-   type -- Always 'shipment' for MC2
+
+-   generated_by -- Name of the program that generated the edge. (Only found on 'bundle' records.)
+
 ## Load packages
+
+The main packages for plotting graphs are: **igraph, tidygraph, ggraph, visNetwork, sf, sfnetworks**. The rest of the packages are for data wrangling.
 
 ```{r}
 pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite)
@@ -15,59 +61,173 @@ pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lub
 
 ## Import data
 
+Use `fromJson` from package **jsonlite** to import main graph data from json file format
+
 ```{r}
 MC2<-fromJSON("data/mc2_challenge_graph.json")
 ```
 
+Import bundle data. Each bundle represents the output of an AI program for link inference. Each bundle represents a list of potential edges to add to the main graph. The challenge is to decide WHICH of these bundles should be used.
+
 ```{r}
 carp<-fromJSON("data/bundles/carp.json")
+catfish<-fromJSON("data/bundles/catfish.json")
+chub_mackerel<-fromJSON("data/bundles/chub_mackerel.json")
+cod<-fromJSON("data/bundles/cod2.json")
+herring<-fromJSON("data/bundles/herring.json")
+lichen<-fromJSON("data/bundles/lichen.json")
+mackerel<-fromJSON("data/bundles/mackerel.json")
+pollock<-fromJSON("data/bundles/pollock.json")
+salmon<-fromJSON("data/bundles/salmon.json")
+salmon_wgl<-fromJSON("data/bundles/salmon_wgl.json")
+shark<-fromJSON("data/bundles/shark.json")
+tuna<-fromJSON("data/bundles/tuna.json")
 ```
-## Extract node information
+
+## Extract node information for the main graph
+
+We will ignore the *dataset* column and use `select` to select *id, shipping country and receiving country* information. Use `glimpse` to view the data.
+
 ```{r}
 MC2_nodes <- as_tibble(MC2$nodes) %>% 
   select(id, shpcountry,rcvcountry)
+
 glimpse(MC2_nodes)
 ```
-```{r}
-MC2_nodes<-
-```
+
+Use `as.factor` to convert the character data type to factor.
 
 ```{r}
-MC2_edges <-as_tibble(MC2$links) %>% 
+MC2_nodes$id <-as.factor(MC2_nodes$id)
+MC2_nodes$shpcountry<-as.factor(MC2_nodes$shpcountry)
+MC2_nodes$rcvcountry<-as.factor(MC2_nodes$rcvcountry)
+
+summary(MC2_nodes)
+```
+
+::: callout-note
+We observed many NA in the shpcountry and rcvcountry columns. Since we are unable to infer the values for these columns, we need to remove rows with NA values.
+:::
+
+## Deal with NA data in node info
+
+Use `na.omit` to remove rows with NA.
+
+```{r}
+MC2_nodes<-MC2_nodes %>% 
+  na.omit()
+
+summary(MC2_nodes)
+```
+
+We use `group_by` to check for each company id how many different *shipcountry* and *rcvcounty* are available to identify the overall trend. Each company only ship to 1 receiving country and ship from 1 ship country.
+
+```{r}
+count<-MC2_nodes %>% 
+  group_by(id) %>% 
+  summarise(no_shpcountry=n_distinct(shpcountry),
+            no_rcvcountry=n_distinct(rcvcountry)) 
+
+summary(count)
+```
+
+## Extract edge information for the main graph
+
+We only considered edges information of nodes in MC2_nodes and used `filter` to filter out the edges for those nodes. We ignored the *dataset* and *type* column and used `select` to select the rest of the attributes of edges of the main graph. Used `glimpse` to view the data.
+
+```{r}
+MC2_edges <-as_tibble(MC2$links) %>%
+  filter(source %in% MC2_nodes$id & 
+           target %in% MC2_nodes$id) %>%
   select(source, target, arrivaldate,hscode,weightkg,volumeteu,valueofgoodsusd,valueofgoods_omu)
+
 glimpse(MC2_edges)
 ```
 
-Convert arrival date data type to date
-```{r}
-MC2_edges<-MC2_edges %>% 
-  mutate(arrivaldate = ymd(arrivaldate)) %>% 
-  mutate(Weekday = wday(arrivaldate,
-                        label = TRUE,
-                        abbr = FALSE))
-glimpse(MC2_edges)
-```
-Convert source, target, hscode data to categorical/factor. 
+::: callout-note
+Wrong data types for *arrivaldate* as well as other character type data need to be converted.
+:::
+
+We used `as.factor` to convert *source, target, hscode*. `mutate` and `ymd` were used to convert *arrival date* data type to date and extract day of the week information from the date with `wday`
+
 ```{r}
 MC2_edges$source<-as.factor(MC2_edges$source)
 MC2_edges$target<-as.factor(MC2_edges$target)
 MC2_edges$hscode<-as.factor(MC2_edges$hscode)
+
+MC2_edges<-MC2_edges %>% 
+  mutate(arrivaldate = ymd(arrivaldate)) %>% 
+  mutate(weekday = wday(arrivaldate,
+                        label = TRUE,
+                        abbr = FALSE))
+glimpse(MC2_edges)
+```
+
+`summary` was used to get a sense of data distribution. Since *volumeteu, valuesofgoods_usd* and *valueofgoods_omu* mostly contain 0 or NA values, we can disregard these columns in the analysis. We also observed that Friday seems to have the highest number of shipments while Wednesday has the lowest number of shipments.
+
+```{r}
 summary(MC2_edges)
 ```
 
-Calculate the weight by using frequency count
+We calculated the weight by using frequency count of the number of links by *source, target*. We also calculate the average *weightkg* for the aggregated data.
+
 ```{r}
 MC2_edges_aggregated<-MC2_edges %>% 
-  group_by(source, target, hscode) %>% 
-  summarise(weight=n())
-glimpse(MC2_edges_aggregated)
+  select(source, target, weightkg) %>% 
+  group_by(source, target) %>% 
+  summarise(weight=n(),
+            weightkg=mean(weightkg))
+
+summary(MC2_edges_aggregated)
 ```
-## Deal with NA; if cannot deduce, remove 
 
-## link table: same target to source with multiple links -> aggregate to get weight (no of time the target links with the source), 
-## directed link
+::: callout-note
+The median weight is 2 while the mean weight is 26, indicating very left skewed distribution of shipments. We are only interested in shipments with higher frequency. We can choose to look at only *source* nodes that have shipped the highest number of shipments and *target* nodes that have received the highest number of shipments
+:::
 
-## create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view 
+To find the top *source*, we first aggregate the *weight* by source id. We used `` `arrange` `` to sort the weight in descending order. `top_n` was used to get the top 50 source with the highest weight
+
+```{r}
+top_source<-MC2_edges_aggregated %>% 
+  group_by(source) %>%
+  summarise(weight=sum(weight)) %>% 
+  arrange(desc(weight)) %>% 
+  top_n(50,weight)
+
+head(top_source,5)
+```
+
+To find the top *target*, we first aggregate the *weight* by source id. We used `` `arrange` `` to sort the weight in descending order. `top_n` was used to get the top 50 sources with the highest weight
+
+```{r}
+top_target<-MC2_edges_aggregated %>% 
+  group_by(target) %>%
+  summarise(weight=sum(weight)) %>% 
+  arrange(desc(weight)) %>% 
+  top_n(50,weight)
+
+head(top_target,5)
+```
+
+We used `filter` to filter the edges and nodes that contain the *source* in *top_source* and *target* in *top_target*
+
+```{r}
+top_MC2_edges<-MC2_edges_aggregated %>% 
+  filter(source %in% top_source$source &
+         target %in% top_target$target) 
+top_MC2_edges
+```
+
+```{r}
+top_MC2_nodes<-MC2_nodes %>% 
+  filter(id %in% top_MC2_edges$source|
+         id %in% top_MC2_edges$target)
+top_MC2_nodes
+```
+
+## This is a directed multi-graph
+
+## create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view
 
 #2000 links: take out the very high frequency links, only take out top 50 source and top 50 target
 
