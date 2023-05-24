@@ -241,10 +241,12 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
   <li><a href="#extract-node-information-for-the-main-graph" id="toc-extract-node-information-for-the-main-graph" class="nav-link" data-scroll-target="#extract-node-information-for-the-main-graph">Extract node information for the main graph</a></li>
   <li><a href="#deal-with-na-data-in-node-info" id="toc-deal-with-na-data-in-node-info" class="nav-link" data-scroll-target="#deal-with-na-data-in-node-info">Deal with NA data in node info</a></li>
   <li><a href="#extract-edge-information-for-the-main-graph" id="toc-extract-edge-information-for-the-main-graph" class="nav-link" data-scroll-target="#extract-edge-information-for-the-main-graph">Extract edge information for the main graph</a></li>
-  <li><a href="#this-is-a-directed-multi-graph" id="toc-this-is-a-directed-multi-graph" class="nav-link" data-scroll-target="#this-is-a-directed-multi-graph">This is a directed multi-graph</a></li>
-  <li><a href="#create-individual-graphs-for-each-of-the-bundle-see-which-one-more-complex-can-calculate-centrality-find-ego-actors-pluck-into-the-bigger-graph-to-find-relationship.-use-visnetwork-to-make-interactive-version-click-on-the-name-based-on-the-bundle-to-know-what-happen-in-the-big-file.-plot-the-time-graph-for-all-the-interactions-occured-coordinated-linked-view" id="toc-create-individual-graphs-for-each-of-the-bundle-see-which-one-more-complex-can-calculate-centrality-find-ego-actors-pluck-into-the-bigger-graph-to-find-relationship.-use-visnetwork-to-make-interactive-version-click-on-the-name-based-on-the-bundle-to-know-what-happen-in-the-big-file.-plot-the-time-graph-for-all-the-interactions-occured-coordinated-linked-view" class="nav-link" data-scroll-target="#create-individual-graphs-for-each-of-the-bundle-see-which-one-more-complex-can-calculate-centrality-find-ego-actors-pluck-into-the-bigger-graph-to-find-relationship.-use-visnetwork-to-make-interactive-version-click-on-the-name-based-on-the-bundle-to-know-what-happen-in-the-big-file.-plot-the-time-graph-for-all-the-interactions-occured-coordinated-linked-view">create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view</a></li>
+  <li><a href="#find-top-sources-and-targets" id="toc-find-top-sources-and-targets" class="nav-link" data-scroll-target="#find-top-sources-and-targets">Find top sources and targets</a></li>
   </ul></li>
-  <li><a href="#data-visualization" id="toc-data-visualization" class="nav-link" data-scroll-target="#data-visualization">Data Visualization</a></li>
+  <li><a href="#data-visualization" id="toc-data-visualization" class="nav-link" data-scroll-target="#data-visualization">Data Visualization</a>
+  <ul class="collapse">
+  <li><a href="#visualize-the-main-graph" id="toc-visualize-the-main-graph" class="nav-link" data-scroll-target="#visualize-the-main-graph">Visualize the main graph</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -307,7 +309,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <h2 class="anchored" data-anchor-id="load-packages">Load packages</h2>
 <p>The main packages for plotting graphs are: <strong>igraph, tidygraph, ggraph, visNetwork, sf, sfnetworks</strong>. The rest of the packages are for data wrangling.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite, zoo)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="import-data" class="level2">
@@ -399,7 +401,7 @@ Note
  (Other):9326   (Other)    :5191   (Other)     :1029  </code></pre>
 </div>
 </div>
-<p>We use <code>group_by</code> to check for each company id how many different <em>shipcountry</em> and <em>rcvcounty</em> are available to identify the overall trend. Each company only ship to 1 receiving country and ship from 1 ship country.</p>
+<p>We use <code>group_by</code> to check for each company id how many different <em>shipcountry</em> and <em>rcvcounty</em> are available to identify the overall trend. Each company only ship to 1 receiving country and ship from 1 shipping country.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>count<span class="ot">&lt;-</span>MC2_nodes <span class="sc">%&gt;%</span> </span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">%&gt;%</span> </span>
@@ -465,11 +467,12 @@ Note
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">arrivaldate =</span> <span class="fu">ymd</span>(arrivaldate)) <span class="sc">%&gt;%</span> </span>
 <span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">weekday =</span> <span class="fu">wday</span>(arrivaldate,</span>
 <span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>                        <span class="at">label =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>                        <span class="at">abbr =</span> <span class="cn">FALSE</span>))</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(MC2_edges)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>                        <span class="at">abbr =</span> <span class="cn">FALSE</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">monthyear=</span><span class="fu">as.yearmon</span>(arrivaldate))</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(MC2_edges)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Rows: 4,482,448
-Columns: 9
+Columns: 10
 $ source           &lt;fct&gt; AquaDelight Inc and Son's, AquaDelight Inc and Son's,…
 $ target           &lt;fct&gt; Océano de Coral Corporation Express, Olas del Mar Wor…
 $ arrivaldate      &lt;date&gt; 2028-04-12, 2028-06-04, 2028-09-03, 2028-09-08, 2029…
@@ -478,7 +481,8 @@ $ weightkg         &lt;int&gt; 9000, 19490, 6865, 19065, 9885, 9880, 18210, 1820
 $ volumeteu        &lt;dbl&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,…
 $ valueofgoodsusd  &lt;dbl&gt; 87110, 188140, NA, 221110, 58645, 58645, 62960, 62945…
 $ valueofgoods_omu &lt;dbl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ weekday          &lt;ord&gt; Wednesday, Sunday, Sunday, Friday, Sunday, Sunday, Su…</code></pre>
+$ weekday          &lt;ord&gt; Wednesday, Sunday, Sunday, Friday, Sunday, Sunday, Su…
+$ monthyear        &lt;yearmon&gt; Apr 2028, Jun 2028, Sep 2028, Sep 2028, Feb 2029,…</code></pre>
 </div>
 </div>
 <p><code>summary</code> was used to get a sense of data distribution. Since <em>volumeteu, valuesofgoods_usd</em> and <em>valueofgoods_omu</em> mostly contain 0 or NA values, we can disregard these columns in the analysis. We also observed that Friday seems to have the highest number of shipments while Wednesday has the lowest number of shipments.</p>
@@ -509,23 +513,23 @@ $ weekday          &lt;ord&gt; Wednesday, Sunday, Sunday, Friday, Sunday, Sunday
  611020 :  79913   3rd Qu.:    19500   3rd Qu.:   0.0   3rd Qu.:1.531e+05  
  304620 :  77535   Max.   :495492485   Max.   :1215.0   Max.   :2.258e+11  
  (Other):3934793                       NA's   :465449   NA's   :2544755    
- valueofgoods_omu       weekday      
- Min.   : NA       Sunday   :682561  
- 1st Qu.: NA       Monday   :645689  
- Median : NA       Tuesday  :592834  
- Mean   :NaN       Wednesday:542019  
- 3rd Qu.: NA       Thursday :602291  
- Max.   : NA       Friday   :743349  
- NA's   :4482448   Saturday :673705  </code></pre>
+ valueofgoods_omu       weekday         monthyear   
+ Min.   : NA       Sunday   :682561   Min.   :2028  
+ 1st Qu.: NA       Monday   :645689   1st Qu.:2030  
+ Median : NA       Tuesday  :592834   Median :2031  
+ Mean   :NaN       Wednesday:542019   Mean   :2031  
+ 3rd Qu.: NA       Thursday :602291   3rd Qu.:2033  
+ Max.   : NA       Friday   :743349   Max.   :2035  
+ NA's   :4482448   Saturday :673705                 </code></pre>
 </div>
 </div>
-<p>We calculated the weight by using frequency count of the number of links by <em>source, target</em>. We also calculate the average <em>weightkg</em> for the aggregated data.</p>
+<p>We calculated the weight by using frequency count of the number of links by <em>source, target and monthyear</em>. We also calculate the average <em>weightkg</em> for the aggregated data.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>MC2_edges_aggregated<span class="ot">&lt;-</span>MC2_edges <span class="sc">%&gt;%</span> </span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(source, target, weightkg) <span class="sc">%&gt;%</span> </span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(source, target) <span class="sc">%&gt;%</span> </span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">weight=</span><span class="fu">n</span>(),</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">weightkg=</span><span class="fu">mean</span>(weightkg))</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(source, target) <span class="sc">%&gt;%</span> </span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">weight=</span><span class="fu">n</span>(),</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">weightkg=</span><span class="fu">mean</span>(weightkg)) <span class="sc">%&gt;%</span> </span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(MC2_edges_aggregated)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -565,9 +569,12 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The median weight is 2 while the mean weight is 26, indicating very left skewed distribution of shipments. We are only interested in shipments with higher frequency. We can choose to look at only <em>source</em> nodes that have shipped the highest number of shipments and <em>target</em> nodes that have received the highest number of shipments</p>
+<p>The median weight is 1 while the mean weight is 26, indicating very left skewed distribution of shipments. We are only interested in shipments with unusual higher frequency. We can choose to look at only <em>source</em> nodes that have shipped the highest number of shipments and <em>target</em> nodes that have received the highest number of shipments</p>
 </div>
 </div>
+</section>
+<section id="find-top-sources-and-targets" class="level2">
+<h2 class="anchored" data-anchor-id="find-top-sources-and-targets">Find top sources and targets</h2>
 <p>To find the top <em>source</em>, we first aggregate the <em>weight</em> by source id. We used <code>`arrange`</code> to sort the weight in descending order. <code>top_n</code> was used to get the top 50 source with the highest weight</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>top_source<span class="ot">&lt;-</span>MC2_edges_aggregated <span class="sc">%&gt;%</span> </span>
@@ -613,60 +620,140 @@ Note
 <div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>top_MC2_edges<span class="ot">&lt;-</span>MC2_edges_aggregated <span class="sc">%&gt;%</span> </span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(source <span class="sc">%in%</span> top_source<span class="sc">$</span>source <span class="sc">&amp;</span></span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>         target <span class="sc">%in%</span> top_target<span class="sc">$</span>target) </span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>top_MC2_edges</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(top_MC2_edges)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 1,573 × 4
-# Groups:   source [50]
-   source                            target                      weight weightkg
-   &lt;fct&gt;                             &lt;fct&gt;                        &lt;int&gt;    &lt;dbl&gt;
- 1 Arunachal Pradesh s A/S Transport Arunachal Pradesh s A/S Tr…  14052    1636.
- 2 Arunachal Pradesh s A/S Transport Black Sea Tuna Snapper           1      30 
- 3 Arunachal Pradesh s A/S Transport Chhattisgarh   Marine ecol…     19     483.
- 4 Arunachal Pradesh s A/S Transport Coastal Castaway Coast Cor…     17     558.
- 5 Arunachal Pradesh s A/S Transport Oceanic Explorers Sashimi …      2     282.
- 6 Arunachal Pradesh s A/S Transport Olas del Mar Worldwide          53     166.
- 7 Arunachal Pradesh s A/S Transport Portuguese Tuna Incorporat…      1     800 
- 8 Arunachal Pradesh s A/S Transport ReefRider Foods Ltd. Corpo…      8     234.
- 9 Arunachal Pradesh s A/S Transport Saltwater Supreme Pelican …      1     290 
-10 Arunachal Pradesh s A/S Transport Uttarakhand  Market Limite…      1      20 
-# ℹ 1,563 more rows</code></pre>
+<pre><code>                                    source    
+ Fresh Limited Liability Company       :  49  
+ Zambezi Gorge  N.V. Transport         :  47  
+ Barents Sea Cod CJSC Export           :  45  
+ Jharkhand  Ltd. Liability Co Worldwide:  43  
+ Mar y Luna Sagl                       :  43  
+ bǐ mù yú Sagl Distribution            :  41  
+ (Other)                               :1305  
+                                          target         weight       
+ hǎi dǎn Corporation Wharf                   :  47   Min.   :    1.0  
+ Caracola del Sol Services                   :  46   1st Qu.:    7.0  
+ Costa de la Felicidad Shipping              :  46   Median :   46.0  
+ Sailors and Surfers Incorporated Enterprises:  46   Mean   :  762.2  
+ Caracola Azul Ltd. Corporation              :  44   3rd Qu.:  274.0  
+ Coral Cove BV Delivery                      :  44   Max.   :47134.0  
+ (Other)                                     :1300                    
+    weightkg       
+ Min.   :       0  
+ 1st Qu.:    5264  
+ Median :   10674  
+ Mean   :   68086  
+ 3rd Qu.:   20086  
+ Max.   :20938883  
+                   </code></pre>
 </div>
 </div>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>top_MC2_nodes<span class="ot">&lt;-</span>MC2_nodes <span class="sc">%&gt;%</span> </span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(id <span class="sc">%in%</span> top_MC2_edges<span class="sc">$</span>source<span class="sc">|</span></span>
 <span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>         id <span class="sc">%in%</span> top_MC2_edges<span class="sc">$</span>target)</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>top_MC2_nodes</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(top_MC2_nodes)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 97 × 3
-   id                                           shpcountry rcvcountry
-   &lt;fct&gt;                                        &lt;fct&gt;      &lt;fct&gt;     
- 1 Olas del Mar Worldwide                       Oceanus    Oceanus   
- 2 French Crab S.p.A. Worldwide                 Kondanovia Utoporiana
- 3 Panope Limited Liability Company             Vesperanda Oceanus   
- 4 hǎi dǎn Corporation Wharf                    Marebak    Oceanus   
- 5 Sea Breezes GmbH &amp; Co. KG Shark              Oceanus    Oceanus   
- 6 Costa de la Felicidad Shipping               Alverossia Oceanus   
- 7 Mar del Este CJSC                            Merigrad   Oceanus   
- 8 Black Sea Tuna Snapper                       Puerto Sol Oceanus   
- 9 Caracola Azul Ltd. Corporation               Lumaland   Oceanus   
-10 Sailors and Surfers Incorporated Enterprises Puerto Sol Oceanus   
-# ℹ 87 more rows</code></pre>
+<pre><code>                                   id          shpcountry           rcvcountry
+ -54                                : 1   Marebak   :21   Oceanus        :80  
+ Ancla Azul Transportation Seafaring: 1   Oceanus   :11   Coralmarica    : 7  
+ Arunachal Pradesh s A/S Transport  : 1   Alverossia: 8   Marebak        : 3  
+ Arunachal Pradesh s Brine          : 1   Rio Isla  : 6   Sol y Oceana   : 2  
+ Barents Sea Cod CJSC Export        : 1   Kondanovia: 5   Anderia del Mar: 1  
+ Belgian Shrimps Ocean Corp Holdings: 1   Puerto Sol: 5   Luminkind      : 1  
+ (Other)                            :91   (Other)   :41   (Other)        : 3  </code></pre>
 </div>
 </div>
-</section>
-<section id="this-is-a-directed-multi-graph" class="level2">
-<h2 class="anchored" data-anchor-id="this-is-a-directed-multi-graph">This is a directed multi-graph</h2>
-</section>
-<section id="create-individual-graphs-for-each-of-the-bundle-see-which-one-more-complex-can-calculate-centrality-find-ego-actors-pluck-into-the-bigger-graph-to-find-relationship.-use-visnetwork-to-make-interactive-version-click-on-the-name-based-on-the-bundle-to-know-what-happen-in-the-big-file.-plot-the-time-graph-for-all-the-interactions-occured-coordinated-linked-view" class="level2">
-<h2 class="anchored" data-anchor-id="create-individual-graphs-for-each-of-the-bundle-see-which-one-more-complex-can-calculate-centrality-find-ego-actors-pluck-into-the-bigger-graph-to-find-relationship.-use-visnetwork-to-make-interactive-version-click-on-the-name-based-on-the-bundle-to-know-what-happen-in-the-big-file.-plot-the-time-graph-for-all-the-interactions-occured-coordinated-linked-view">create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view</h2>
-<p>#2000 links: take out the very high frequency links, only take out top 50 source and top 50 target</p>
+<p>This is a directed multi-graph</p>
+<p>create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view</p>
 </section>
 </section>
 <section id="data-visualization" class="level1">
 <h1>Data Visualization</h1>
+<section id="visualize-the-main-graph" class="level2">
+<h2 class="anchored" data-anchor-id="visualize-the-main-graph">Visualize the main graph</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>top_MC2_graph<span class="ot">&lt;-</span><span class="fu">tbl_graph</span>(<span class="at">nodes=</span>top_MC2_nodes,</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">edges=</span>top_MC2_edges,</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">directed =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>top_MC2_graph</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tbl_graph: 97 nodes and 1573 edges
+#
+# A directed multigraph with 1 component
+#
+# A tibble: 97 × 3
+  id                               shpcountry rcvcountry
+  &lt;fct&gt;                            &lt;fct&gt;      &lt;fct&gt;     
+1 Olas del Mar Worldwide           Oceanus    Oceanus   
+2 French Crab S.p.A. Worldwide     Kondanovia Utoporiana
+3 Panope Limited Liability Company Vesperanda Oceanus   
+4 hǎi dǎn Corporation Wharf        Marebak    Oceanus   
+5 Sea Breezes GmbH &amp; Co. KG Shark  Oceanus    Oceanus   
+6 Costa de la Felicidad Shipping   Alverossia Oceanus   
+# ℹ 91 more rows
+#
+# A tibble: 1,573 × 4
+   from    to weight weightkg
+  &lt;int&gt; &lt;int&gt;  &lt;int&gt;    &lt;dbl&gt;
+1     1     1  14052    1636.
+2     1     2      1      30 
+3     1     3     19     483.
+# ℹ 1,570 more rows</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>top_MC2_graph <span class="sc">%&gt;%</span> </span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">activate</span>(edges) <span class="sc">%&gt;%</span> </span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(weight))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tbl_graph: 97 nodes and 1573 edges
+#
+# A directed multigraph with 1 component
+#
+# A tibble: 1,573 × 4
+   from    to weight weightkg
+  &lt;int&gt; &lt;int&gt;  &lt;int&gt;    &lt;dbl&gt;
+1    76    42  47134    6800.
+2     5     5  46205     595.
+3    62    42  35898    7609.
+4     3     3  28788     177.
+5    55    19  23752   16682.
+6    84    25  21969   51730.
+# ℹ 1,567 more rows
+#
+# A tibble: 97 × 3
+  id                               shpcountry rcvcountry
+  &lt;fct&gt;                            &lt;fct&gt;      &lt;fct&gt;     
+1 Olas del Mar Worldwide           Oceanus    Oceanus   
+2 French Crab S.p.A. Worldwide     Kondanovia Utoporiana
+3 Panope Limited Liability Company Vesperanda Oceanus   
+# ℹ 94 more rows</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># |fig-width: 100</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="co"># |fig-height: 100</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>g<span class="ot">&lt;-</span>top_MC2_graph <span class="sc">%&gt;%</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">betweenness_centrality=</span><span class="fu">centrality_betweenness</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggraph</span>(<span class="at">layout =</span> <span class="st">"fr"</span>)<span class="sc">+</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_edge_link</span>(<span class="fu">aes</span>(<span class="at">width=</span>weight), <span class="at">alpha=</span><span class="fl">0.2</span>)<span class="sc">+</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_edge_width</span>(<span class="at">range =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="dv">5</span>))<span class="sc">+</span></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_node_point</span>(<span class="fu">aes</span>(<span class="at">colour=</span>shpcountry, </span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>                      <span class="at">size=</span>betweenness_centrality))</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>g<span class="sc">+</span><span class="fu">facet_nodes</span>(<span class="sc">~</span>rcvcountry)<span class="sc">+</span></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">th_foreground</span>(<span class="at">foreground =</span> <span class="st">"grey80"</span>,  </span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>                <span class="at">border =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">'bottom'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Take-home_Ex02_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

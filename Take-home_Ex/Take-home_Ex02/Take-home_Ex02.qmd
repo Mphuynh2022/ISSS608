@@ -56,7 +56,7 @@ Edge Attributes:
 The main packages for plotting graphs are: **igraph, tidygraph, ggraph, visNetwork, sf, sfnetworks**. The rest of the packages are for data wrangling.
 
 ```{r}
-pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite)
+pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite, zoo)
 ```
 
 ## Import data
@@ -120,7 +120,7 @@ MC2_nodes<-MC2_nodes %>%
 summary(MC2_nodes)
 ```
 
-We use `group_by` to check for each company id how many different *shipcountry* and *rcvcounty* are available to identify the overall trend. Each company only ship to 1 receiving country and ship from 1 ship country.
+We use `group_by` to check for each company id how many different *shipcountry* and *rcvcounty* are available to identify the overall trend. Each company only ship to 1 receiving country and ship from 1 shipping country.
 
 ```{r}
 count<-MC2_nodes %>% 
@@ -159,7 +159,8 @@ MC2_edges<-MC2_edges %>%
   mutate(arrivaldate = ymd(arrivaldate)) %>% 
   mutate(weekday = wday(arrivaldate,
                         label = TRUE,
-                        abbr = FALSE))
+                        abbr = FALSE)) %>% 
+  mutate(monthyear=as.yearmon(arrivaldate))
 glimpse(MC2_edges)
 ```
 
@@ -169,21 +170,23 @@ glimpse(MC2_edges)
 summary(MC2_edges)
 ```
 
-We calculated the weight by using frequency count of the number of links by *source, target*. We also calculate the average *weightkg* for the aggregated data.
+We calculated the weight by using frequency count of the number of links by *source, target and monthyear*. We also calculate the average *weightkg* for the aggregated data.
 
 ```{r}
 MC2_edges_aggregated<-MC2_edges %>% 
-  select(source, target, weightkg) %>% 
   group_by(source, target) %>% 
   summarise(weight=n(),
-            weightkg=mean(weightkg))
+            weightkg=mean(weightkg)) %>% 
+  ungroup()
 
 summary(MC2_edges_aggregated)
 ```
 
 ::: callout-note
-The median weight is 2 while the mean weight is 26, indicating very left skewed distribution of shipments. We are only interested in shipments with higher frequency. We can choose to look at only *source* nodes that have shipped the highest number of shipments and *target* nodes that have received the highest number of shipments
+The median weight is 1 while the mean weight is 26, indicating very left skewed distribution of shipments. We are only interested in shipments with unusual higher frequency. We can choose to look at only *source* nodes that have shipped the highest number of shipments and *target* nodes that have received the highest number of shipments
 :::
+
+## Find top sources and targets
 
 To find the top *source*, we first aggregate the *weight* by source id. We used `` `arrange` `` to sort the weight in descending order. `top_n` was used to get the top 50 source with the highest weight
 
@@ -215,20 +218,52 @@ We used `filter` to filter the edges and nodes that contain the *source* in *top
 top_MC2_edges<-MC2_edges_aggregated %>% 
   filter(source %in% top_source$source &
          target %in% top_target$target) 
-top_MC2_edges
+summary(top_MC2_edges)
 ```
 
 ```{r}
 top_MC2_nodes<-MC2_nodes %>% 
   filter(id %in% top_MC2_edges$source|
          id %in% top_MC2_edges$target)
-top_MC2_nodes
+summary(top_MC2_nodes)
 ```
 
-## This is a directed multi-graph
+This is a directed multi-graph
 
-## create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view
-
-#2000 links: take out the very high frequency links, only take out top 50 source and top 50 target
+create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view
 
 # Data Visualization
+
+## Visualize the main graph
+
+```{r}
+top_MC2_graph<-tbl_graph(nodes=top_MC2_nodes,
+                         edges=top_MC2_edges,
+                         directed = TRUE)
+```
+
+```{r}
+top_MC2_graph
+```
+
+```{r}
+top_MC2_graph %>% 
+  activate(edges) %>% 
+  arrange(desc(weight))
+```
+
+```{r}
+# |fig-width: 100
+# |fig-height: 100
+g<-top_MC2_graph %>%
+  mutate(betweenness_centrality=centrality_betweenness()) %>% 
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(width=weight), alpha=0.2)+
+  scale_edge_width(range = c(0.1, 5))+
+  geom_node_point(aes(colour=shpcountry, 
+                      size=betweenness_centrality))
+g+facet_nodes(~rcvcountry)+
+  th_foreground(foreground = "grey80",  
+                border = TRUE) +
+  theme(legend.position = 'bottom')
+```
