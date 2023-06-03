@@ -109,17 +109,6 @@ summary(MC2_nodes)
 We observed many NA in the shpcountry and rcvcountry columns. Since we are unable to infer the values for these columns, we need to remove rows with NA values.
 :::
 
-## Deal with NA data in node info
-
-Use `na.omit` to remove rows with NA.
-
-```{r}
-MC2_nodes<-MC2_nodes %>% 
-  na.omit()
-
-summary(MC2_nodes)
-```
-
 We use `group_by` to check for each company id how many different *shipcountry* and *rcvcounty* are available to identify the overall trend. Each company only ship to 1 receiving country and ship from 1 shipping country.
 
 ```{r}
@@ -137,9 +126,8 @@ We only considered edges information of nodes in MC2_nodes and used `filter` to 
 
 ```{r}
 MC2_edges <-as_tibble(MC2$links) %>%
-  filter(source %in% MC2_nodes$id & 
-           target %in% MC2_nodes$id) %>%
-  select(source, target, arrivaldate,hscode,weightkg,volumeteu,valueofgoodsusd,valueofgoods_omu)
+  select(source, target, arrivaldate,hscode,weightkg,volumeteu,valueofgoodsusd,valueofgoods_omu) %>% 
+  distinct()
 
 glimpse(MC2_edges)
 ```
@@ -153,14 +141,14 @@ We used `as.factor` to convert *source, target, hscode*. `mutate` and `ymd` were
 ```{r}
 MC2_edges$source<-as.factor(MC2_edges$source)
 MC2_edges$target<-as.factor(MC2_edges$target)
-MC2_edges$hscode<-as.factor(MC2_edges$hscode)
 
 MC2_edges<-MC2_edges %>% 
   mutate(arrivaldate = ymd(arrivaldate)) %>% 
   mutate(weekday = wday(arrivaldate,
                         label = TRUE,
                         abbr = FALSE)) %>% 
-  mutate(monthyear=as.yearmon(arrivaldate))
+  mutate(monthyear=as.yearmon(arrivaldate)) %>% 
+  mutate(year=year(arrivaldate))
 glimpse(MC2_edges)
 ```
 
@@ -170,100 +158,241 @@ glimpse(MC2_edges)
 summary(MC2_edges)
 ```
 
-We calculated the weight by using frequency count of the number of links by *source, target and monthyear*. We also calculate the average *weightkg* for the aggregated data.
+## Filter out irrelevant hscode
+
+We use `n_distinct()` to check the number of hscode available in the dataset. There are many hscode values that are not relevant to our project. For example, hscode 470710 is for shipment of paper or paperboard. hscode that are relevant to our fish data will include only those that starts with:
+
+-   "301": Live Fish
+
+-   "302: Fresh or chilled fish exclude fish fillets and fish meat in 304
+
+-   "303": Frozen fish
+
+-   "304": Fish fillets and fish meat (fresh, chilled or frozen)
+
+-   "305": Fish, dried, salted or in brine
+
+sed `substr()` to extract the first 3 digit from hscode and then filter rows with only the hscode that starts with 301, 302, 303, 304, 305.
 
 ```{r}
-MC2_edges_aggregated<-MC2_edges %>% 
-  group_by(source, target) %>% 
+n_distinct(MC2_edges$hscode)
+  
+```
+
+```{r}
+MC2_edges_filtered<-MC2_edges %>% 
+  mutate(sub_hscode=substr(hscode,1,3)) %>% 
+  filter(sub_hscode %in% c("301","302","303","304","305"))
+
+MC2_edges_filtered$sub_hscode<-as.factor(MC2_edges_filtered$sub_hscode)
+
+summary(MC2_edges_filtered$sub_hscode)
+```
+
+Since we have very few 301 and 302 code type, we will focus on 303 and 304 hscodes. We calculated the weight by using frequency count of the number of links by *source, target and monthyear*. We also calculate the average *weightkg* for the aggregated data.
+
+```{r}
+MC2_edges_aggregated<-MC2_edges_filtered %>%
+  filter(sub_hscode %in% c("303", "304")) %>%
+  group_by(source, target, monthyear) %>% 
   summarise(weight=n(),
             weightkg=mean(weightkg)) %>% 
+  filter(weight>20) %>% 
   ungroup()
 
 summary(MC2_edges_aggregated)
 ```
 
 ::: callout-note
-The median weight is 1 while the mean weight is 26, indicating very left skewed distribution of shipments. We are only interested in shipments with unusual higher frequency. We can choose to look at only *source* nodes that have shipped the highest number of shipments and *target* nodes that have received the highest number of shipments
+Weight has a right skewed distribution with mean of 8 and median of 2. We are only interested in shipments with unusual higher frequency (weight\>20). We can choose to look at only *source* nodes that have shipped the highest number of shipments and *target* nodes that have received the highest number of shipments
 :::
 
-## Find top sources and targets
+## Prepare nodes data with top sources and targets
 
-To find the top *source*, we first aggregate the *weight* by source id. We used `` `arrange` `` to sort the weight in descending order. `top_n` was used to get the top 50 source with the highest weight
-
-```{r}
-top_source<-MC2_edges_aggregated %>% 
-  group_by(source) %>%
-  summarise(weight=sum(weight)) %>% 
-  arrange(desc(weight)) %>% 
-  top_n(50,weight)
-
-head(top_source,5)
-```
-
-To find the top *target*, we first aggregate the *weight* by source id. We used `` `arrange` `` to sort the weight in descending order. `top_n` was used to get the top 50 sources with the highest weight
+We prepare the nodes that are in the aggregated data source and target.
 
 ```{r}
-top_target<-MC2_edges_aggregated %>% 
-  group_by(target) %>%
-  summarise(weight=sum(weight)) %>% 
-  arrange(desc(weight)) %>% 
-  top_n(50,weight)
+id1 <- MC2_edges_aggregated %>%
+  select(source) %>%
+  rename(id = source)
+id2 <- MC2_edges_aggregated %>%
+  select(target) %>%
+  rename(id = target)
+MC2_nodes_aggregated <- rbind(id1, id2) %>%
+  distinct()
+MC2_nodes_aggregated<-merge(MC2_nodes_aggregated, MC2_nodes, by="id")
 
-head(top_target,5)
+MC2_nodes_aggregated
 ```
-
-We used `filter` to filter the edges and nodes that contain the *source* in *top_source* and *target* in *top_target*
-
-```{r}
-top_MC2_edges<-MC2_edges_aggregated %>% 
-  filter(source %in% top_source$source &
-         target %in% top_target$target) 
-summary(top_MC2_edges)
-```
-
-```{r}
-top_MC2_nodes<-MC2_nodes %>% 
-  filter(id %in% top_MC2_edges$source|
-         id %in% top_MC2_edges$target)
-summary(top_MC2_nodes)
-```
-
-This is a directed multi-graph
-
-create individual graphs for each of the bundle, see which one more complex, can calculate centrality, find ego actors, pluck into the bigger graph to find relationship. use visnetwork to make interactive version, click on the name based on the bundle to know what happen in the big file. Plot the time graph for all the interactions occured coordinated linked view
 
 # Data Visualization
 
+## Temporal analysis
+
+```{r}
+source_trend<-MC2_edges%>%
+  filter(sub_hscode %in% c("303","304")) %>% 
+  group_by(source,year) %>%
+  summarise(weight=n(),
+            weightkg=sum(weightkg)) %>%
+  arrange(year)
+source_trend
+```
+
+```{r}
+source_trend<-source_trend %>% 
+  group_by(source) %>%
+  mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
+  mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>% 
+  mutate(count=n()) %>% 
+  filter(count==7)
+
+summary(source_trend)
+```
+
+```{r}
+  ggplot(source_trend, aes(x = year, y = weight_pct_change,
+             colour=source))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")
+```
+
+```{r}
+ggplot(source_trend, aes(x = year, y = weightkg_pct_change,
+             colour=source))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")
+```
+
+```{r}
+target_trend<-MC2_edges%>%
+  filter(sub_hscode %in% c("303","304")) %>% 
+  group_by(target,year) %>%
+  summarise(weight=n(),
+            weightkg=sum(weightkg)) %>%
+  arrange(year)
+target_trend
+```
+
+```{r}
+target_trend<-target_trend %>% 
+  group_by(target) %>%
+  mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
+  mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>% 
+  mutate(count=n()) %>% 
+  filter(count==7)
+
+summary(target_trend)
+```
+
+```{r}
+  ggplot(target_trend, aes(x = year, y = weight_pct_change,
+             colour=target))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")
+```
+
+```{r}
+  ggplot(target_trend, aes(x = year, y = weightkg_pct_change,
+             colour=target))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")
+```
+
+```{r}
+source_target_trend<-MC2_edges%>%
+  filter(sub_hscode %in% c("303","304")) %>% 
+  group_by(source,target, year) %>%
+  summarise(weight=n(),
+            weightkg=sum(weightkg)) %>%
+  arrange(year)
+
+summary(source_target_trend)
+```
+
 ## Visualize the main graph
 
+```` ```{r} # MC2_graph<-tbl_graph(nodes=MC2_nodes_aggregated, #                          edges=MC2_edges_aggregated, #                          directed = TRUE) ````
+
 ```{r}
-top_MC2_graph<-tbl_graph(nodes=top_MC2_nodes,
-                         edges=top_MC2_edges,
-                         directed = TRUE)
+# MC2_graph
 ```
 
 ```{r}
-top_MC2_graph
+# MC2_graph %>%
+#   activate(edges) %>% 
+#   arrange(desc(weight))
+```
+
+```{r warning=FALSE}
+# # |fig-width: 100
+# # |fig-height: 100
+# g<-MC2_graph %>%
+#   ggraph(layout = "nicely")+
+#   geom_edge_link(aes(width=weight), alpha=0.2)+
+#   scale_edge_width(range = c(0.1, 5))+
+#   geom_node_point()+
+#   theme(legend.position = 'bottom')
+#   
+# # g+facet_nodes(~year)+
+# #   th_foreground(foreground = "grey80",  
+# #                 border = TRUE) +
+# #   theme(legend.position = 'bottom')
+# 
+# g
 ```
 
 ```{r}
-top_MC2_graph %>% 
-  activate(edges) %>% 
-  arrange(desc(weight))
+# top_MC2_edges_aggregated<-top_MC2_edges %>% 
+#   rename(from=source) %>% 
+#   rename(to=target)
+# 
+# top_MC2_edges_aggregated
+# 
+# top_MC2_nodes<-top_MC2_nodes %>% 
+#   rename(group=year)
 ```
 
 ```{r}
-# |fig-width: 100
-# |fig-height: 100
-g<-top_MC2_graph %>%
-  mutate(betweenness_centrality=centrality_betweenness()) %>% 
-  ggraph(layout = "fr")+
-  geom_edge_link(aes(width=weight), alpha=0.2)+
-  scale_edge_width(range = c(0.1, 5))+
-  geom_node_point(aes(colour=shpcountry, 
-                      size=betweenness_centrality))
-g+facet_nodes(~rcvcountry)+
-  th_foreground(foreground = "grey80",  
-                border = TRUE) +
-  theme(legend.position = 'bottom')
+visNetwork(top_MC2_nodes,
+           top_MC2_edges_aggregated) %>% 
+  visIgraphLayout(layout = "layout_with_fr") %>% 
+  visEdges(arrows = "to", 
+           smooth = list(enabled = TRUE, 
+                         type = "curvedCW")) %>%
+  visLegend() %>% 
+  visLayout(randomSeed=123) %>% 
+  visOptions(highlightNearest = TRUE,
+             nodesIdSelection = TRUE)
 ```
+
+```{r}
+carp_edges<-as_tibble(carp$links) %>%   
+  mutate(ArrivalDate = ymd(arrivaldate)) %>%
+  mutate(Year = year(ArrivalDate)) %>%
+  mutate(sub_hscode=substr(hscode,1,3)) %>% 
+  mutate(hscode=as.factor(hscode)) %>%
+  mutate(sub_hscode=as.factor(sub_hscode)) %>% 
+  select(source, target, ArrivalDate, Year, hscode, weightkg, sub_hscode) %>% 
+  distinct()
+summary(carp_edges$sub_hscode)
+```
+
+```{r}
+catfish_edges<-as_tibble(catfish$links) %>%   
+  mutate(ArrivalDate = ymd(arrivaldate)) %>%
+  mutate(Year = year(ArrivalDate)) %>%
+  mutate(sub_hscode=substr(hscode,1,3)) %>% 
+  mutate(hscode=as.factor(hscode)) %>%
+  mutate(sub_hscode=as.factor(sub_hscode)) 
+ 
+summary(catfish_edges$sub_hscode)
+```
+
+## Community Dectection
+
+group_components()
