@@ -22,6 +22,8 @@ averp <-read_csv("data/AVERP.csv")
 ```{r}
 averp %>% 
   mutate(`Date`=dmy(`Date`))
+
+glimpse(averp)
 ```
 
 ```{r}
@@ -31,7 +33,7 @@ averp %>%
   geom_horizon(aes(x = Date, y=Values),
                origin = "midpoint",
                horizonscale = 6)+
-  facet_grid("Consumer Items"~.)+
+  facet_grid(`Consumer Items`~.)+
     theme_few() +
   scale_fill_hcl(palette = 'RdBu')
   # theme(panel.spacing.y=unit(0, "lines"), strip.text.y = element_text(

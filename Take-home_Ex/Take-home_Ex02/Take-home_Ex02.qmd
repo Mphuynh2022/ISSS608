@@ -139,16 +139,17 @@ Wrong data types for *arrivaldate* as well as other character type data need to 
 We used `as.factor` to convert *source, target, hscode*. `mutate` and `ymd` were used to convert *arrival date* data type to date and extract day of the week information from the date with `wday`
 
 ```{r}
-MC2_edges$source<-as.factor(MC2_edges$source)
-MC2_edges$target<-as.factor(MC2_edges$target)
-
 MC2_edges<-MC2_edges %>% 
   mutate(arrivaldate = ymd(arrivaldate)) %>% 
   mutate(weekday = wday(arrivaldate,
                         label = TRUE,
                         abbr = FALSE)) %>% 
   mutate(monthyear=as.yearmon(arrivaldate)) %>% 
-  mutate(year=year(arrivaldate))
+  mutate(year=year(arrivaldate))%>% 
+  filter(source!=target)
+
+MC2_edges$source<-as.factor(MC2_edges$source)
+MC2_edges$target<-as.factor(MC2_edges$target)
 glimpse(MC2_edges)
 ```
 
@@ -172,7 +173,11 @@ We use `n_distinct()` to check the number of hscode available in the dataset. Th
 
 -   "305": Fish, dried, salted or in brine
 
-sed `substr()` to extract the first 3 digit from hscode and then filter rows with only the hscode that starts with 301, 302, 303, 304, 305.
+-   "1604": Extracts and juices of meat, fish or crustaceans molluscs or other aquatic invertebrates
+
+-   "1605": Prepared or preserved fish
+
+we use `substr()` to extract the first 3 digits from hscode and then filter rows with only the hscode that starts with 301, 302, 303, 304, 305. We also extract the first 4 digits from hscode and filter those with 1604 and 1605.
 
 ```{r}
 n_distinct(MC2_edges$hscode)
@@ -181,33 +186,25 @@ n_distinct(MC2_edges$hscode)
 
 ```{r}
 MC2_edges_filtered<-MC2_edges %>% 
-  mutate(sub_hscode=substr(hscode,1,3)) %>% 
-  filter(sub_hscode %in% c("301","302","303","304","305"))
+  mutate(sub_hscode3=substr(hscode,1,3)) %>%
+  mutate(sub_hscode4=substr(hscode,1,4)) %>% 
+  filter(sub_hscode3 %in% c("301","302","303","304","305")|sub_hscode4 %in% c("1604","1605")) 
 
-MC2_edges_filtered$sub_hscode<-as.factor(MC2_edges_filtered$sub_hscode)
+MC2_edges_filtered$hscode<-as.factor(MC2_edges_filtered$hscode)
 
-summary(MC2_edges_filtered$sub_hscode)
+summary(MC2_edges_filtered$hscode)
 ```
-
-Since we have very few 301 and 302 code type, we will focus on 303 and 304 hscodes. We calculated the weight by using frequency count of the number of links by *source, target and monthyear*. We also calculate the average *weightkg* for the aggregated data.
 
 ```{r}
 MC2_edges_aggregated<-MC2_edges_filtered %>%
-  filter(sub_hscode %in% c("303", "304")) %>%
-  group_by(source, target, monthyear) %>% 
-  summarise(weight=n(),
-            weightkg=mean(weightkg)) %>% 
+  filter(hscode=='304810') %>% 
+  group_by(source, target, hscode, year) %>% 
+  summarise(weight=n()) %>%
   filter(weight>20) %>% 
   ungroup()
-
-summary(MC2_edges_aggregated)
 ```
 
-::: callout-note
-Weight has a right skewed distribution with mean of 8 and median of 2. We are only interested in shipments with unusual higher frequency (weight\>20). We can choose to look at only *source* nodes that have shipped the highest number of shipments and *target* nodes that have received the highest number of shipments
-:::
-
-## Prepare nodes data with top sources and targets
+## Prepare nodes data
 
 We prepare the nodes that are in the aggregated data source and target.
 
@@ -227,15 +224,147 @@ MC2_nodes_aggregated
 
 # Data Visualization
 
+## Visualize the main graph
+
+```{r}
+MC2_graph<-tbl_graph(nodes=MC2_nodes_aggregated,                          edges=MC2_edges_aggregated,                          directed = TRUE)
+```
+
+```{r}
+MC2_graph 
+```
+
+```{r warning=FALSE}
+# |fig-width: 100 
+# |fig-height: 100 
+set_graph_style()
+set.seed(1234)
+MC2_graph %>%
+  ggraph(layout = "fr")+   
+  geom_edge_link()+   
+  geom_node_point()+   
+  theme_graph()
+
+```
+
+```{r}
+MC2_graph %>% 
+  mutate(centrality = centrality_authority())%>%
+  ggraph(layout = "fr") +
+  geom_edge_link() +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(size = centrality, colour = centrality))+
+  scale_color_continuous(guide = 'legend') +
+  theme_graph()
+```
+
+```{r}
+edges_df<-MC2_graph %>% 
+  activate(edges) %>% 
+  as.tibble()
+```
+
+```{r}
+nodes_df<-MC2_graph %>% 
+  activate(nodes) %>% 
+  as.tibble() %>% 
+  rename(label=id) %>% 
+  mutate(id=row_number()) %>% 
+  select(id,label)
+```
+
+```{r}
+visNetwork(nodes_df,edges_df)%>%    
+  visIgraphLayout(layout = "layout_with_fr") %>%  
+  visEdges(arrows = "to", 
+           smooth = list(enabled = TRUE,              
+                         type = "curvedCW")) %>%
+  visLegend() %>%    
+  visLayout(randomSeed=123) %>%    
+  visOptions(highlightNearest = TRUE, 
+             nodesIdSelection = TRUE)
+```
+
 ## Temporal analysis
 
 ```{r}
-source_trend<-MC2_edges%>%
-  filter(sub_hscode %in% c("303","304")) %>% 
-  group_by(source,year) %>%
+overall_trend <-MC2_edges_filtered%>%
+  group_by(monthyear) %>%
+  summarise(weight=n(),
+            weightkg=mean(weightkg)) %>%
+  arrange(monthyear) %>% 
+  ungroup()
+
+overall_trend %>% 
+  ggplot(aes(x = monthyear, y=weightkg))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")+
+  theme_minimal()
+```
+
+```{r}
+overall_trend <-MC2_edges_filtered%>%
+  filter(monthyear<'Jan 2034' & monthyear>='Jan 2033') %>%
+  mutate(monthyear=as.factor(monthyear)) %>% 
+  group_by(weekday,monthyear) %>%
+  summarise(weight=n(),
+            weightkg=mean(weightkg)) %>%
+  arrange(weekday,monthyear) %>% 
+  ungroup()
+
+overall_trend %>% 
+  ggplot(aes(monthyear,weekday, fill=weight))+
+geom_tile(colour='white',
+          size=0.1)+ 
+scale_fill_gradient(name = "No of shipments",
+                    low = "sky blue", 
+                    high = "dark blue") +
+   theme_minimal()+
+labs(x = NULL, 
+     y = NULL, 
+     title = "No of shipments by month year and weekday") +
+theme(axis.text.x=element_text(angle=30, vjust=0.5),
+      plot.title = element_text(hjust = 0.5),
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 6) )
+ 
+```
+
+```{r}
+overall_trend <-MC2_edges_filtered%>%
+  filter(monthyear>='Jan 2034') %>%
+  mutate(monthyear=as.factor(monthyear)) %>% 
+  group_by(weekday,monthyear) %>%
+  summarise(weight=n(),
+            weightkg=mean(weightkg)) %>%
+  arrange(weekday,monthyear) %>% 
+  ungroup()
+
+overall_trend %>% 
+  ggplot(aes(monthyear,weekday, fill=weight))+
+geom_tile(colour='white',
+          size=0.1)+ 
+scale_fill_gradient(name = "No of shipments",
+                    low = "sky blue", 
+                    high = "dark blue") +
+   theme_minimal()+
+labs(x = NULL, 
+     y = NULL, 
+     title = "No of shipments by month year and weekday") +
+theme(axis.text.x=element_text(angle=30, vjust=0.5),
+      plot.title = element_text(hjust = 0.5),
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 6) )
+```
+
+```{r}
+source_trend<-MC2_edges_filtered%>%
+  group_by(source, monthyear) %>%
   summarise(weight=n(),
             weightkg=sum(weightkg)) %>%
-  arrange(year)
+  arrange(monthyear) %>% 
+  ungroup()
 source_trend
 ```
 
@@ -245,13 +374,14 @@ source_trend<-source_trend %>%
   mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
   mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>% 
   mutate(count=n()) %>% 
-  filter(count==7)
+  filter(count==84)
 
 summary(source_trend)
 ```
 
 ```{r}
-  ggplot(source_trend, aes(x = year, y = weight_pct_change,
+set.seed(1234)  
+ggplot(source_trend, aes(x = monthyear, y = weight_pct_change,
              colour=source))+
   geom_point()+
   geom_line()+
@@ -259,7 +389,8 @@ summary(source_trend)
 ```
 
 ```{r}
-ggplot(source_trend, aes(x = year, y = weightkg_pct_change,
+set.seed(1234) 
+ggplot(source_trend, aes(x = monthyear, y = weightkg_pct_change,
              colour=source))+
   geom_point()+
   geom_line()+
@@ -267,8 +398,7 @@ ggplot(source_trend, aes(x = year, y = weightkg_pct_change,
 ```
 
 ```{r}
-target_trend<-MC2_edges%>%
-  filter(sub_hscode %in% c("303","304")) %>% 
+target_trend<-MC2_edges_filtered%>%
   group_by(target,year) %>%
   summarise(weight=n(),
             weightkg=sum(weightkg)) %>%
@@ -303,96 +433,39 @@ summary(target_trend)
   theme(legend.position="none")
 ```
 
-```{r}
-source_target_trend<-MC2_edges%>%
-  filter(sub_hscode %in% c("303","304")) %>% 
-  group_by(source,target, year) %>%
-  summarise(weight=n(),
-            weightkg=sum(weightkg)) %>%
-  arrange(year)
-
-summary(source_target_trend)
-```
-
-## Visualize the main graph
-
-```` ```{r} # MC2_graph<-tbl_graph(nodes=MC2_nodes_aggregated, #                          edges=MC2_edges_aggregated, #                          directed = TRUE) ````
-
-```{r}
-# MC2_graph
-```
-
-```{r}
-# MC2_graph %>%
-#   activate(edges) %>% 
-#   arrange(desc(weight))
-```
-
-```{r warning=FALSE}
-# # |fig-width: 100
-# # |fig-height: 100
-# g<-MC2_graph %>%
-#   ggraph(layout = "nicely")+
-#   geom_edge_link(aes(width=weight), alpha=0.2)+
-#   scale_edge_width(range = c(0.1, 5))+
-#   geom_node_point()+
-#   theme(legend.position = 'bottom')
-#   
-# # g+facet_nodes(~year)+
-# #   th_foreground(foreground = "grey80",  
-# #                 border = TRUE) +
-# #   theme(legend.position = 'bottom')
-# 
-# g
-```
-
-```{r}
-# top_MC2_edges_aggregated<-top_MC2_edges %>% 
-#   rename(from=source) %>% 
-#   rename(to=target)
-# 
-# top_MC2_edges_aggregated
-# 
-# top_MC2_nodes<-top_MC2_nodes %>% 
-#   rename(group=year)
-```
-
-```{r}
-visNetwork(top_MC2_nodes,
-           top_MC2_edges_aggregated) %>% 
-  visIgraphLayout(layout = "layout_with_fr") %>% 
-  visEdges(arrows = "to", 
-           smooth = list(enabled = TRUE, 
-                         type = "curvedCW")) %>%
-  visLegend() %>% 
-  visLayout(randomSeed=123) %>% 
-  visOptions(highlightNearest = TRUE,
-             nodesIdSelection = TRUE)
-```
-
-```{r}
-carp_edges<-as_tibble(carp$links) %>%   
-  mutate(ArrivalDate = ymd(arrivaldate)) %>%
-  mutate(Year = year(ArrivalDate)) %>%
-  mutate(sub_hscode=substr(hscode,1,3)) %>% 
-  mutate(hscode=as.factor(hscode)) %>%
-  mutate(sub_hscode=as.factor(sub_hscode)) %>% 
-  select(source, target, ArrivalDate, Year, hscode, weightkg, sub_hscode) %>% 
-  distinct()
-summary(carp_edges$sub_hscode)
-```
-
-```{r}
-catfish_edges<-as_tibble(catfish$links) %>%   
-  mutate(ArrivalDate = ymd(arrivaldate)) %>%
-  mutate(Year = year(ArrivalDate)) %>%
-  mutate(sub_hscode=substr(hscode,1,3)) %>% 
-  mutate(hscode=as.factor(hscode)) %>%
-  mutate(sub_hscode=as.factor(sub_hscode)) 
- 
-summary(catfish_edges$sub_hscode)
-```
+## 
 
 ## Community Dectection
 
-group_components()
+```{r}
+graph<-tbl_graph(nodes=MC2_nodes_aggregated,                          edges=MC2_edges_aggregated,                          directed = FALSE)
+```
+
+```{r}
+graph <-graph%>%
+  mutate(community = as.factor(group_optimal(weights = weight))) 
+graph
+```
+
+```{r}
+edges<-graph %>% 
+  activate(edges) %>% 
+  as.tibble()
+
+nodes<-graph %>% 
+  activate(nodes) %>% 
+  as.tibble() %>% 
+  rename(label=id) %>% 
+  mutate(id=row_number()) %>% 
+  rename(group=community)
+```
+
+```{r}
+visNetwork(nodes,
+           edges) %>%
+  visIgraphLayout(layout = "layout_with_fr") %>%
+  visLegend() %>%
+  visLayout(randomSeed = 123) %>% 
+  visOptions(highlightNearest = TRUE, 
+             nodesIdSelection = TRUE)
+```
