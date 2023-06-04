@@ -5,6 +5,10 @@ execute:
   echo: true
   eval: true
   warning: false
+format:
+  html:
+    code-fold: true
+    code-summary: "Show code"
 ---
 
 # Overview
@@ -56,7 +60,7 @@ Edge Attributes:
 The main packages for plotting graphs are: **igraph, tidygraph, ggraph, visNetwork, sf, sfnetworks**. The rest of the packages are for data wrangling.
 
 ```{r}
-pacman::p_load(igraph,tidygraph,sf,sfnetworks,ggraph,visNetwork,sftime,ggmap,lubridate,clock,tmap,readr,ggplot2,tidyverse,graphlayouts,assertthat,purrr, jsonlite, zoo)
+pacman::p_load(igraph,tidygraph,ggraph,visNetwork,ggmap,tmap,ggplot2,tidyverse,graphlayouts,jsonlite,zoo,plotly)
 ```
 
 ## Import data
@@ -67,21 +71,7 @@ Use `fromJson` from package **jsonlite** to import main graph data from json fil
 MC2<-fromJSON("data/mc2_challenge_graph.json")
 ```
 
-Import bundle data. Each bundle represents the output of an AI program for link inference. Each bundle represents a list of potential edges to add to the main graph. The challenge is to decide WHICH of these bundles should be used.
-
-```{r}
-carp<-fromJSON("data/bundles/carp.json")
-catfish<-fromJSON("data/bundles/catfish.json")
-chub_mackerel<-fromJSON("data/bundles/chub_mackerel.json")
-cod<-fromJSON("data/bundles/cod2.json")
-herring<-fromJSON("data/bundles/herring.json")
-lichen<-fromJSON("data/bundles/lichen.json")
-mackerel<-fromJSON("data/bundles/mackerel.json")
-pollock<-fromJSON("data/bundles/pollock.json")
-salmon<-fromJSON("data/bundles/salmon.json")
-salmon_wgl<-fromJSON("data/bundles/salmon_wgl.json")
-shark<-fromJSON("data/bundles/shark.json")
-tuna<-fromJSON("data/bundles/tuna.json")
+```         
 ```
 
 ## Extract node information for the main graph
@@ -159,7 +149,7 @@ glimpse(MC2_edges)
 summary(MC2_edges)
 ```
 
-## Filter out irrelevant hscode
+## Filter out irrelevant edges
 
 We use `n_distinct()` to check the number of hscode available in the dataset. There are many hscode values that are not relevant to our project. For example, hscode 470710 is for shipment of paper or paperboard. hscode that are relevant to our fish data will include only those that starts with:
 
@@ -195,31 +185,140 @@ MC2_edges_filtered$hscode<-as.factor(MC2_edges_filtered$hscode)
 summary(MC2_edges_filtered$hscode)
 ```
 
+## Identify key source and target nodes
+
+Top 10% of the source with the highest number of shipments account for 80% of the total shipments
+
 ```{r}
-MC2_edges_aggregated<-MC2_edges_filtered %>%
-  filter(hscode=='304810') %>% 
-  group_by(source, target, hscode, year) %>% 
-  summarise(weight=n()) %>%
-  filter(weight>20) %>% 
-  ungroup()
+Top_sources_tw<-MC2_edges_filtered %>%
+  group_by(source) %>% 
+  summarise(weight_total=n()) %>% 
+  arrange(weight_total)%>% 
+  mutate(cm_weight_pct=100*cumsum(weight_total)/sum(weight_total)) %>% 
+  mutate(rec=1,
+         cm_pop_pct=100*cumsum(rec)/sum(rec))
+
+
+Top_sources_tw %>%  
+  ggplot(aes(cm_pop_pct,cm_weight_pct))+
+  geom_line()+
+  scale_x_continuous(name="Percent of population", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  scale_y_continuous(name="Cumulative weight percentage", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  ggtitle("Cumulative Percentage of Number of Shipments vs Percent of Population")+
+  theme_minimal()
 ```
 
-## Prepare nodes data
-
-We prepare the nodes that are in the aggregated data source and target.
+Top 20% of the top sources by distinct number of target ship to 70% of the targets
 
 ```{r}
-id1 <- MC2_edges_aggregated %>%
-  select(source) %>%
-  rename(id = source)
-id2 <- MC2_edges_aggregated %>%
-  select(target) %>%
-  rename(id = target)
-MC2_nodes_aggregated <- rbind(id1, id2) %>%
-  distinct()
-MC2_nodes_aggregated<-merge(MC2_nodes_aggregated, MC2_nodes, by="id")
+Top_sources_dist<-MC2_edges_filtered %>%
+  group_by(source) %>% 
+  summarise(weight_distinct=n_distinct(target)) %>% 
+  arrange(weight_distinct)%>% 
+  mutate(cm_weight_pct=100*cumsum(weight_distinct)/sum(weight_distinct)) %>% 
+  mutate(rec=1,
+         cm_pop_pct=100*cumsum(rec)/sum(rec))
 
-MC2_nodes_aggregated
+
+Top_sources_dist %>%  
+  ggplot(aes(cm_pop_pct,cm_weight_pct))+
+  geom_line()+
+  scale_x_continuous(name="Percent of population", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  scale_y_continuous(name="Cumulative distinct weight percentage", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+    ggtitle("Cumulative Percentage of Number of Distinct Targets vs Percent of Population")+
+  theme_minimal()
+```
+
+We filter the edge information to contain only the top sources that have not only highest number of total connections but also highest number of unique connections. We extracted 284 top sources based on this method.
+
+```{r}
+id1<-Top_sources_tw %>% 
+  filter(cm_pop_pct>95) %>% 
+  select(source)
+
+id2<-Top_sources_dist %>% 
+  filter(cm_pop_pct>95) %>% 
+  select(source)
+
+top_sources<-merge(id1,id2, by='source')
+
+MC2_edges_filtered<-merge(top_sources, MC2_edges_filtered, by='source')
+```
+
+Similar analysis is performed to identify the top targets that account for the majority of the weight of the graph as well as have the highest distinct number of sources.
+
+```{r}
+Top_targets_tw<-MC2_edges_filtered %>%
+  group_by(target) %>% 
+  summarise(weight_total=n()) %>% 
+  arrange(weight_total)%>% 
+  mutate(cm_weight_pct=100*cumsum(weight_total)/sum(weight_total)) %>%   mutate(rec=1,
+         cm_pop_pct=100*cumsum(rec)/sum(rec))
+
+
+Top_targets_tw %>%  
+  ggplot(aes(cm_pop_pct,cm_weight_pct))+
+  geom_line()+
+  scale_x_continuous(name="Percent of population", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  scale_y_continuous(name="Cumulative weight percentage", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  ggtitle("Cumulative Percentage of Number of Shipments vs Percent of Population")+
+  theme_minimal()
+
+```
+
+```{r}
+Top_targets_dist<-MC2_edges_filtered %>%
+  group_by(target) %>% 
+  summarise(weight_distinct=n_distinct(source)) %>% 
+  arrange(weight_distinct)%>% 
+  mutate(cm_weight_pct=100*cumsum(weight_distinct)/sum(weight_distinct)) %>% 
+  mutate(rec=1,
+         cm_pop_pct=100*cumsum(rec)/sum(rec))
+
+
+Top_targets_dist %>%  
+  ggplot(aes(cm_pop_pct,cm_weight_pct))+
+  geom_line()+
+  scale_x_continuous(name="Percent of population", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  scale_y_continuous(name="Cumulative distinct weight percentage", limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+    ggtitle("Cumulative Percentage of Number of Distinct Targets vs Percent of Population")+
+  theme_minimal()
+```
+
+```{r}
+id3<-Top_targets_tw %>% 
+  filter(cm_pop_pct>97.5) %>% 
+  select(target)
+
+id4<-Top_targets_dist %>% 
+  filter(cm_pop_pct>85) %>% 
+  select(target)
+
+top_targets<-merge(id3,id4, by='target')
+
+MC2_edges_st<-merge(top_targets, MC2_edges_filtered, by='target')
+```
+
+We aggregate the weight of the filtered edges as well as the total weight in kg of the shipments based on source, target, hscode, weekday and monthyear.We will use this data for temporal analysis
+
+```{r}
+MC2_edges_aggregated<-MC2_edges_filtered %>%
+  group_by(source, target, hscode, weekday, monthyear,year) %>% 
+  summarise(weight=n(), 
+            weightkg=sum(weightkg)) %>%
+  mutate(hscode=as.factor(hscode)) %>% 
+  ungroup()
+summary(MC2_edges_aggregated)
+```
+
+To plot the overall network graph, we will further aggregate this data by source, target and year. As hscode 304620 has the highest count, we will also look at the graph in with this hscode. 
+
+```{r}
+MC2_edges_graph<-MC2_edges_aggregated%>%
+  filter(hscode=='304620'& (year=='2028'| year=='2034')) %>% 
+  group_by(source, target, year) %>% 
+  summarise(weight=n()) %>%
+  ungroup()
 ```
 
 # Data Visualization
@@ -227,224 +326,81 @@ MC2_nodes_aggregated
 ## Visualize the main graph
 
 ```{r}
-MC2_graph<-tbl_graph(nodes=MC2_nodes_aggregated,                          edges=MC2_edges_aggregated,                          directed = TRUE)
+MC2_graph<-as_tbl_graph(MC2_edges_graph,
+                        directed = T)
 ```
 
-```{r}
-MC2_graph 
-```
-
+We can see that the number of edges for nodes at the boundary of the graph decreases from 2028 to 2034. Since our graph is directed, this means that there are fewer shipments between the weakly connected nodes. The nodes with high degree centrality for this type of shipments do not change significantly from 2028 to 2034. 
 ```{r warning=FALSE}
 # |fig-width: 100 
 # |fig-height: 100 
-set_graph_style()
-set.seed(1234)
 MC2_graph %>%
+  mutate(centrality = centrality_authority()) %>% 
   ggraph(layout = "fr")+   
-  geom_edge_link()+   
-  geom_node_point()+   
-  theme_graph()
-
-```
-
-```{r}
-MC2_graph %>% 
-  mutate(centrality = centrality_authority())%>%
-  ggraph(layout = "fr") +
-  geom_edge_link() +
-  scale_edge_width(range = c(0.1, 5)) +
-  geom_node_point(aes(size = centrality, colour = centrality))+
+  geom_edge_link(aes(width=weight), 
+                 alpha=0.2)+
+  scale_edge_width(range = c(0.1, 5))+
+  geom_node_point(aes(size = centrality, colour = centrality))+   
+  theme_graph()+
   scale_color_continuous(guide = 'legend') +
-  theme_graph()
+  theme_graph()+
+  facet_edges(~year)+
+  th_foreground(foreground = "grey80",  
+                border = TRUE) +
+  theme(legend.position = 'bottom')
 ```
-
+Next we will use visnetwork to create an interactive graph and zoom into the high in degree centrality nodes. We can identify a few companies that have the highest degree centrality: Caracola del Sol Services, hǎi dǎn Corporation Wharf, and Mar del Este CJSC
 ```{r}
-edges_df<-MC2_graph %>% 
+edges_df<-MC2_graph%>% 
   activate(edges) %>% 
   as.tibble()
 ```
 
 ```{r}
-nodes_df<-MC2_graph %>% 
+nodes_df<-MC2_graph%>%
+  mutate(centrality = centrality_authority()) %>% 
   activate(nodes) %>% 
-  as.tibble() %>% 
-  rename(label=id) %>% 
-  mutate(id=row_number()) %>% 
-  select(id,label)
+  as.tibble() %>%
+  rename(label=name) %>% 
+  mutate(id=row_number()) %>%
+  select(id, label, centrality) 
 ```
 
 ```{r}
-visNetwork(nodes_df,edges_df)%>%    
+visNetwork(nodes=nodes_df,edges=edges_df)%>%    
   visIgraphLayout(layout = "layout_with_fr") %>%  
   visEdges(arrows = "to", 
            smooth = list(enabled = TRUE,              
                          type = "curvedCW")) %>%
-  visLegend() %>%    
+  visLegend() %>%
   visLayout(randomSeed=123) %>%    
   visOptions(highlightNearest = TRUE, 
              nodesIdSelection = TRUE)
 ```
 
-## Temporal analysis
-
+We change the arrows option to from to identify the sources with high outdegree centrality. There are more companies with high out degree centrality such as Sea Breezes S.A. de C.V. Freight, Arena del Sol Pic.  
+It is noteworthy that the high indegree source Caracola del Sol Services identified in the previous link also have a high outdegree centrality. We can take a closer look at the network and the temporal trend of this company.  
 ```{r}
-overall_trend <-MC2_edges_filtered%>%
-  group_by(monthyear) %>%
-  summarise(weight=n(),
-            weightkg=mean(weightkg)) %>%
-  arrange(monthyear) %>% 
-  ungroup()
-
-overall_trend %>% 
-  ggplot(aes(x = monthyear, y=weightkg))+
-  geom_point()+
-  geom_line()+
-  theme(legend.position="none")+
-  theme_minimal()
+visNetwork(nodes=nodes_df,edges=edges_df)%>%    
+  visIgraphLayout(layout = "layout_with_fr") %>%  
+  visEdges(arrows = "from", 
+           smooth = list(enabled = TRUE,              
+                         type = "curvedCW")) %>%
+  visLegend() %>%
+  visLayout(randomSeed=123) %>%    
+  visOptions(highlightNearest = TRUE, 
+             nodesIdSelection = TRUE)
 ```
-
-```{r}
-overall_trend <-MC2_edges_filtered%>%
-  filter(monthyear<'Jan 2034' & monthyear>='Jan 2033') %>%
-  mutate(monthyear=as.factor(monthyear)) %>% 
-  group_by(weekday,monthyear) %>%
-  summarise(weight=n(),
-            weightkg=mean(weightkg)) %>%
-  arrange(weekday,monthyear) %>% 
-  ungroup()
-
-overall_trend %>% 
-  ggplot(aes(monthyear,weekday, fill=weight))+
-geom_tile(colour='white',
-          size=0.1)+ 
-scale_fill_gradient(name = "No of shipments",
-                    low = "sky blue", 
-                    high = "dark blue") +
-   theme_minimal()+
-labs(x = NULL, 
-     y = NULL, 
-     title = "No of shipments by month year and weekday") +
-theme(axis.text.x=element_text(angle=30, vjust=0.5),
-      plot.title = element_text(hjust = 0.5),
-      legend.title = element_text(size = 8),
-      legend.text = element_text(size = 6) )
- 
-```
-
-```{r}
-overall_trend <-MC2_edges_filtered%>%
-  filter(monthyear>='Jan 2034') %>%
-  mutate(monthyear=as.factor(monthyear)) %>% 
-  group_by(weekday,monthyear) %>%
-  summarise(weight=n(),
-            weightkg=mean(weightkg)) %>%
-  arrange(weekday,monthyear) %>% 
-  ungroup()
-
-overall_trend %>% 
-  ggplot(aes(monthyear,weekday, fill=weight))+
-geom_tile(colour='white',
-          size=0.1)+ 
-scale_fill_gradient(name = "No of shipments",
-                    low = "sky blue", 
-                    high = "dark blue") +
-   theme_minimal()+
-labs(x = NULL, 
-     y = NULL, 
-     title = "No of shipments by month year and weekday") +
-theme(axis.text.x=element_text(angle=30, vjust=0.5),
-      plot.title = element_text(hjust = 0.5),
-      legend.title = element_text(size = 8),
-      legend.text = element_text(size = 6) )
-```
-
-```{r}
-source_trend<-MC2_edges_filtered%>%
-  group_by(source, monthyear) %>%
-  summarise(weight=n(),
-            weightkg=sum(weightkg)) %>%
-  arrange(monthyear) %>% 
-  ungroup()
-source_trend
-```
-
-```{r}
-source_trend<-source_trend %>% 
-  group_by(source) %>%
-  mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
-  mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>% 
-  mutate(count=n()) %>% 
-  filter(count==84)
-
-summary(source_trend)
-```
-
-```{r}
-set.seed(1234)  
-ggplot(source_trend, aes(x = monthyear, y = weight_pct_change,
-             colour=source))+
-  geom_point()+
-  geom_line()+
-  theme(legend.position="none")
-```
-
-```{r}
-set.seed(1234) 
-ggplot(source_trend, aes(x = monthyear, y = weightkg_pct_change,
-             colour=source))+
-  geom_point()+
-  geom_line()+
-  theme(legend.position="none")
-```
-
-```{r}
-target_trend<-MC2_edges_filtered%>%
-  group_by(target,year) %>%
-  summarise(weight=n(),
-            weightkg=sum(weightkg)) %>%
-  arrange(year)
-target_trend
-```
-
-```{r}
-target_trend<-target_trend %>% 
-  group_by(target) %>%
-  mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
-  mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>% 
-  mutate(count=n()) %>% 
-  filter(count==7)
-
-summary(target_trend)
-```
-
-```{r}
-  ggplot(target_trend, aes(x = year, y = weight_pct_change,
-             colour=target))+
-  geom_point()+
-  geom_line()+
-  theme(legend.position="none")
-```
-
-```{r}
-  ggplot(target_trend, aes(x = year, y = weightkg_pct_change,
-             colour=target))+
-  geom_point()+
-  geom_line()+
-  theme(legend.position="none")
-```
-
-## 
 
 ## Community Dectection
 
-```{r}
-graph<-tbl_graph(nodes=MC2_nodes_aggregated,                          edges=MC2_edges_aggregated,                          directed = FALSE)
-```
+We used `group_louvain()` which implements the multi-level modularity optimization algorithm for finding community structure. It is based on the modularity measure and a hierarchical approach. Initially, each vertex is assigned to a community on its own. In every step, vertices are re-assigned to communities in a local, greedy way: each vertex is moved to the community with which it achieves the highest contribution to modularity. When no vertices can be reassigned, each community is considered a vertex on its own, and the process starts again with the merged communities. The process stops when there is only a single vertex left or when the modularity cannot be increased any more in a step.
 
 ```{r}
-graph <-graph%>%
-  mutate(community = as.factor(group_optimal(weights = weight))) 
-graph
+graph<-as_tbl_graph(MC2_edges_graph, directed=F)
+graph<-graph%>%
+  mutate(community = as.factor(group_louvain())) 
+
 ```
 
 ```{r}
@@ -455,7 +411,7 @@ edges<-graph %>%
 nodes<-graph %>% 
   activate(nodes) %>% 
   as.tibble() %>% 
-  rename(label=id) %>% 
+  rename(label=name) %>% 
   mutate(id=row_number()) %>% 
   rename(group=community)
 ```
@@ -469,3 +425,222 @@ visNetwork(nodes,
   visOptions(highlightNearest = TRUE, 
              nodesIdSelection = TRUE)
 ```
+
+## Temporal analysis
+
+We see a dip in the overall trend of the shipment volume from 2028 to 2031 and then an increase from 2031 to 2034
+
+```{r}
+overall_trend <-MC2_edges_filtered%>%
+  group_by(monthyear) %>%
+  summarise(weight=n(),
+            weightkg=mean(weightkg)) %>%
+  arrange(monthyear) %>% 
+  ungroup()
+
+t<-overall_trend %>% 
+  ggplot(aes(x = monthyear, y=weightkg))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")+
+  theme_minimal()+
+  ggtitle('Overall trend in the monthly average shipment volume in kg over time')+
+  scale_y_continuous(name="Average shipment volume in kg")+
+  scale_x_continuous(name="Month Year", breaks=c(2028,2029,2030,2031,2032,2033,2034,2035))+
+  theme_minimal()
+
+ggplotly(t,
+         tooltip=c("x","y"))
+```
+
+We observed the same trend the the monthly total number of shipments over time. 
+```{r}
+t2<-overall_trend %>% 
+  ggplot(aes(x = monthyear, y=weight))+
+  geom_point()+
+  geom_line()+
+  theme(legend.position="none")+
+  theme_minimal()+
+  ggtitle('Overall trend in the monthly total number of shipments over time')+
+  scale_y_continuous(name="No of shipments")+
+  scale_x_continuous(name="Month Year", breaks=c(2028,2029,2030,2031,2032,2033,2034,2035))+
+  theme_minimal()
+
+ggplotly(t,
+         tooltip=c("x","y"))
+```
+
+Now we will take a closer look at the temporal shipment pattern of one of key node in shipments of hscode '304620' 
+```{r}
+key_node_28 <-MC2_edges_filtered%>%
+  filter(monthyear<'Jan 2029'&
+        (source=='Caracola del Sol Services' | target=='Caracola del Sol Services')) %>%
+  mutate(monthyear=as.factor(monthyear)) %>% 
+  group_by(weekday,monthyear) %>%
+  summarise(weight=n(),
+            weightkg=mean(weightkg)) %>%
+  arrange(weekday,monthyear) %>% 
+  ungroup()
+
+key_node_28 %>% 
+  ggplot(aes(monthyear,weekday, fill=weight))+
+geom_tile(colour='white',
+          size=0.1)+ 
+scale_fill_gradient(name = "No of shipments",
+                    low = "sky blue", 
+                    high = "dark blue") +
+   theme_minimal()+
+labs(x = NULL, 
+     y = NULL, 
+     title = "No of shipments by month year and weekday in 2028") +
+theme(axis.text.x=element_text(angle=30, vjust=0.5),
+      plot.title = element_text(hjust = 0.5),
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 6) )
+ 
+```
+
+```{r}
+key_node_34 <-MC2_edges_filtered%>%
+  filter(monthyear>='Jan 2034'&
+        (source=='Caracola del Sol Services' | target=='Caracola del Sol Services')) %>% 
+  mutate(monthyear=as.factor(monthyear)) %>% 
+  group_by(weekday,monthyear) %>%
+  summarise(weight=n(),
+            weightkg=mean(weightkg)) %>%
+  arrange(weekday,monthyear) %>% 
+  ungroup()
+
+key_node_34 %>% 
+  ggplot(aes(monthyear,weekday, fill=weight))+
+geom_tile(colour='white',
+          size=0.1)+ 
+scale_fill_gradient(name = "No of shipments",
+                    low = "sky blue", 
+                    high = "dark blue") +
+   theme_minimal()+
+labs(x = NULL, 
+     y = NULL, 
+     title = "No of shipments by month year and weekday in 2034") +
+theme(axis.text.x=element_text(angle=30, vjust=0.5),
+      plot.title = element_text(hjust = 0.5),
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 6) )
+
+```
+
+We will plot the percentage change in the monthly total number of shipments over time by individual source to identify any abnormal increase or decrease in the number of shipments. From the graph, we can get the name of the company from the tooltip function.  
+
+```{r}
+source_trend<-MC2_edges_filtered%>%
+  group_by(source, monthyear) %>%
+  summarise(weight=n(),
+            weightkg=sum(weightkg)) %>%
+  arrange(monthyear) %>% 
+  ungroup()
+```
+
+```{r}
+source_trend<-source_trend %>% 
+  group_by(source) %>%
+  mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
+  mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>% 
+  na.omit()
+```
+
+```{r}
+st<-ggplot(source_trend, aes(x = monthyear, y = weight_pct_change,
+             colour=source))+
+  geom_point()+
+  geom_line()+  
+  ggtitle('Percentage change of the monthly total number of shipments over time shipped by each source')+
+  scale_y_continuous(name="Percentage change of number of shipments")+
+  scale_x_continuous(name="Month Year", breaks=c(2028,2029,2030,2031,2032,2033,2034,2035))+
+  theme_minimal()+
+  theme(legend.position="none")
+  
+
+ggplotly(st,
+         tooltip=c('colour',
+         "x",
+         "y"))
+```
+
+We will plot the percentage change in the monthly total volume of shipments over time by individual source to identify any abnormal increase or decrease in the volume of shipments. From the graph, we can identify these companies with the tooltip function.  
+```{r}
+stkg<-ggplot(source_trend, aes(x = monthyear, y = weightkg_pct_change,
+             colour=source))+
+  geom_point()+
+  geom_line()+  
+  ggtitle('Percentage change of volume in kg of shipments over time shipped by each source')+
+  scale_y_continuous(name="Percentage change of volume in kg of shipments")+
+  scale_x_continuous(name="Month Year", breaks=c(2028,2029,2030,2031,2032,2033,2034,2035))+
+  theme_minimal()+
+  theme(legend.position="none")
+  
+
+ggplotly(stkg,
+         tooltip=c('colour',
+         "x",
+         "y"))
+```
+
+We will perform the same analysis for the targets. 
+```{r}
+target_trend<-MC2_edges_filtered%>%
+  group_by(target, monthyear) %>%
+  summarise(weight=n(),
+            weightkg=sum(weightkg)) %>%
+  arrange(monthyear) %>% 
+  ungroup()
+```
+
+```{r}
+target_trend<-target_trend %>% 
+  group_by(target) %>%
+  mutate(weightkg_pct_change=round((weightkg/lag(weightkg)-1)*100,0)) %>% 
+  mutate(weight_pct_change=round((weight/lag(weight)-1)*100,0)) %>%
+  na.omit()
+  
+```
+
+```{r}
+twkg<-ggplot(target_trend, aes(x = monthyear, y = weightkg_pct_change,
+             colour=target))+
+  geom_point()+
+  geom_line()+  
+  ggtitle('Percentage change of volume in kg of shipments over time received by each target')+
+  scale_y_continuous(name="Percentage change of volume in kg of shipments")+
+  scale_x_continuous(name="Month Year", breaks=c(2028,2029,2030,2031,2032,2033,2034,2035))+
+  theme_minimal()+
+  theme(legend.position="none")
+  
+
+ggplotly(twkg,
+         tooltip=c('colour',
+         "x",
+         "y"))
+
+  
+```
+
+```{r}
+tw<-ggplot(target_trend, aes(x = monthyear, y = weight_pct_change,
+             colour=target))+
+  geom_point()+
+  geom_line()+  
+  ggtitle('Percentage change of total number of shipments over time received by each target')+
+  scale_y_continuous(name="Percentage change of number of shipments")+
+  scale_x_continuous(name="Month Year", breaks=c(2028,2029,2030,2031,2032,2033,2034,2035))+
+  theme_minimal()+
+  theme(legend.position="none")
+  
+
+ggplotly(tw,
+         tooltip=c('colour',
+         "x",
+         "y"))
+```
+
+
+
