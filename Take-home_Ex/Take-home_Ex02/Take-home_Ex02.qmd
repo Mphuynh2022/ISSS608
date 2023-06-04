@@ -470,7 +470,7 @@ ggplotly(t,
          tooltip=c("x","y"))
 ```
 
-Now we will take a closer look at the temporal shipment pattern of one of key node in shipments of hscode '304620' 
+Now we will take a closer look at the temporal shipment pattern of one of key node in shipments of hscode '304620'. For Caracola del Sol Services, their shipments used to be more frequent on Saturday and Monday in 2028. In 2034, they have more shipments on Monday, Tuesday and Sunday instead.   
 ```{r}
 key_node_28 <-MC2_edges_filtered%>%
   filter(monthyear<'Jan 2029'&
@@ -492,7 +492,7 @@ scale_fill_gradient(name = "No of shipments",
    theme_minimal()+
 labs(x = NULL, 
      y = NULL, 
-     title = "No of shipments by month year and weekday in 2028") +
+     title = "No of shipments by month year and weekday in 2028 Caracola del Sol Services") +
 theme(axis.text.x=element_text(angle=30, vjust=0.5),
       plot.title = element_text(hjust = 0.5),
       legend.title = element_text(size = 8),
@@ -521,7 +521,7 @@ scale_fill_gradient(name = "No of shipments",
    theme_minimal()+
 labs(x = NULL, 
      y = NULL, 
-     title = "No of shipments by month year and weekday in 2034") +
+     title = "No of shipments by month year and weekday in 2034 for Caracola del Sol Services") +
 theme(axis.text.x=element_text(angle=30, vjust=0.5),
       plot.title = element_text(hjust = 0.5),
       legend.title = element_text(size = 8),
@@ -529,7 +529,7 @@ theme(axis.text.x=element_text(angle=30, vjust=0.5),
 
 ```
 
-We will plot the percentage change in the monthly total number of shipments over time by individual source to identify any abnormal increase or decrease in the number of shipments. From the graph, we can get the name of the company from the tooltip function.  
+next, We will plot the percentage change in the monthly total number of shipments over time by all individual sources to identify any abnormal increase or decrease in the number of shipments for any particular source. From the graph, we can get the name of the company from the tooltip function. In this case, companies with abnormal shipments are: Costa de Coral RSL, Mar del Norte and Ola Azul Ges m Services.    
 
 ```{r}
 source_trend<-MC2_edges_filtered%>%
@@ -585,7 +585,7 @@ ggplotly(stkg,
          "y"))
 ```
 
-We will perform the same analysis for the targets. 
+We will perform the same analysis for the targets to check if any target receive unusual number of shipments or unusual volume of shipment  over time  
 ```{r}
 target_trend<-MC2_edges_filtered%>%
   group_by(target, monthyear) %>%
