@@ -93,7 +93,7 @@ attacks <- attacks %>%
 ```
 
 ::: callout-note
-Beside extracting the necessary data into *attacks* data frame, `mutate()`of **dplyr** package is used to convert*wkday* and *hour*fields into **factor** so they\'ll be ordered when plotting
+Beside extracting the necessary data into *attacks* data frame, `mutate()`of **dplyr** package is used to convert*wkday* and *hour*fields into **factor** so they'll be ordered when plotting
 :::
 
 ```{r}
