@@ -1,25 +1,83 @@
 ---
 title: "Take-home_Ex03"
 author: "Huynh Minh Phuong"
+execute:
+  echo: true
+  eval: true
+  warning: false
+format:
+  html:
+    code-fold: true
+    code-summary: "Show code"
 ---
 
+# Getting started
+
+FishEye International, a non-profit organization dedicated to combatting the scourge of illegal, unreported and unregulated (IUU) fishing, has been granted access to fishing-related companies' financial database, offered by an international finance corporation. Through their previous investigations, FishEye has discovered that companies with unusual arrangements are more likely to be engaged in IUU activities or other questionable practices. To leverage this valuable resource, FishEye has transformed the database into a comprehensive knowledge graph, which encompasses data on companies, owners, workers and revenue.
+
+The primary objective of our project is to employ this graph to detect irregularities that may indicate a company's involvement in IUU fishing.
+
+Dataset contains the knowledge graph with 27,622 nodes and 24,038 edges:
+
+**Node Attributes:**
+
+-   type -- Type of node as defined above.
+
+-   country -- Country associated with the entity. This can be a full country or a two-letter country code.
+
+-   product_services -- Description of product services that the "id" node does.
+
+-   revenue_omu -- Operating revenue of the "id" node in Oceanus Monetary Units.
+
+-   id -- Identifier of the node is also the name of the entry.
+
+-   role -- The subset of the "type" node, not in every node attribute.
+
+**Edge Attributes:**
+
+-   type -- Type of the edge as defined above.
+
+-   source -- ID of the source node.
+
+-   target -- ID of the target node.
+
+-   dataset -- Always "MC3".
+
+-   role - The subset of the "type" node, not in every edge attribute.
+
+## Load packages
+
 ```{r}
-pacman::p_load(jsonlite, tidygraph,ggraph,visNetwork,graphlayouts,ggforce,tidytext,tidyverse)
+pacman::p_load(jsonlite, tidygraph, ggraph,igraph,lsa, 
+               visNetwork, graphlayouts, ggforce, 
+               skimr, tidytext, tidyverse, plotly, naniar, tm, topicmodels, ldatuning)
 ```
 
-Undirected graph
+## Load data set
 
 ```{r}
 mc3_data <-fromJSON("data/MC3.json")
 
 ```
 
-Source, target and type data is a list
+### Extracting edges
+
+We first extract links data into a tibble using `as_tibble()`
 
 ```{r}
 mc3_edges <-as_tibble(mc3_data$links)
 glimpse(mc3_edges)
 ```
+
+Next, we will wrangle the data for edges:
+
+-   `distinct()` is used to ensure that there will be no duplicated records.
+
+-   `mutate()` and `as.character()` are used to convert the field data type from list to character.
+
+-   `group_by()` and `summarise()` are used to count the number of unique links.
+
+-   the `filter(source!=target)` is to ensure that no record with similar source and target.
 
 ```{r}
 mc3_edges <-mc3_edges %>% 
@@ -31,12 +89,23 @@ mc3_edges <-mc3_edges %>%
   summarise(weights=n()) %>% 
   filter(source!=target) %>% 
   ungroup()
-  
 ```
+
+### Extracting nodes
+
+We use `as_tibble()` to extract node data into a tibble.
 
 ```{r}
 mc3_nodes <-as_tibble(mc3_data$nodes)
 ```
+
+We wrangle the node data:
+
+-   `mutate()` and `as.character()` are used to convert the field data type from list to character.
+
+-   To convert *revenue_omu* from list data type to numeric data type, we need to convert the values into character first by using `as.character()`. Then, `as.numeric()` will be used to convert them into numeric data type.
+
+-   `select()` is used to re-organise the order of the fields.
 
 ```{r}
 mc3_nodes<-mc3_nodes %>% 
@@ -48,17 +117,326 @@ mc3_nodes<-mc3_nodes %>%
   select(id, country, type, revenue_omu, product_services)
 ```
 
+# Initial Data Exploration
+
+## Edge data
+
+In the code chunk below, [`skim()`](https://docs.ropensci.org/skimr/reference/skim.html) of [**skimr**](https://docs.ropensci.org/skimr/) package is used to display the summary statistics of *mc3_edges* tibble data frame.
+
 ```{r}
-ggplot(mc3_nodes, aes(x=type))+
-  geom_bar()
+skim(mc3_edges)
 ```
 
-Possible type of relationship
+The report above reveals that there is no missing values in all fields.
 
-owner to business
+`datatable()` of DT package is used to display mc3_edges tibble data frame as an interactive table on the html document.
 
-company to company
+```{r}
+DT::datatable(mc3_edges)
+```
 
-company contact to company- customer to business
+We use ggplot to plot the frequency of different types of relationship in the edges. We have two types: beneficial owner and company contacts.
 
-or by product_service
+```{r}
+type_freq<-ggplot(mc3_edges, aes(x=type))+
+  geom_bar()+
+  theme_minimal()+
+  ggtitle('Frequency Count by Relationship Type')
+
+ggplotly(type_freq)  
+```
+
+We take a look at the number of companies under each owner. Most owners have only 1 company. We will extract the graph for those owners with more than 3 companies under them. There are 67 such owners. We will look at the network of these owners.
+
+```{r}
+owner_companycnt<-mc3_edges %>% 
+  filter(type=='Beneficial Owner') %>% 
+  group_by(target) %>% 
+  summarise(company_count=n()) %>% 
+  arrange(desc(company_count)) %>% 
+  ggplot(aes(x=company_count)) +
+  geom_bar()+
+  scale_x_continuous(breaks=c(1:10))+
+  theme_minimal()+
+  ggtitle('Frequency Count by Number of Companies under each owner')
+ggplotly(owner_companycnt)
+```
+
+```{r}
+# Extract onwers with more than 3 companies
+owners<-mc3_edges %>% 
+  filter(type=='Beneficial Owner') %>% 
+  group_by(target) %>% 
+  summarise(company_count=n()) %>% 
+  filter(company_count>3)
+```
+
+
+## Node data
+
+Use [`skim()`](https://docs.ropensci.org/skimr/reference/skim.html) of [**skimr**](https://docs.ropensci.org/skimr/) package is used to display the summary statistics of *mc3_nodes* tibble data frame.
+
+```{r}
+skim(mc3_nodes)
+```
+
+There are missing values in revenue_omu but no missing values in other variables: id, country, type, product_services
+
+`datatable()` of DT package is used to display mc3_nodes tibble data frame as an interactive table on the html document.
+
+```{r}
+DT::datatable(mc3_nodes)
+```
+
+Plot the frequency of type of nodes using `geom_bar()`
+
+```{r}
+ggplot(data = mc3_nodes,
+       aes(x = type)) +
+  geom_bar()+
+  theme_minimal()
+```
+
+```{r}
+mc3_nodes %>% 
+  group_by(id) %>% 
+  mutate(country_count=n_distinct(country)) %>%
+  arrange(desc(country_count)) %>% 
+  ggplot(aes(x=country_count))+
+  geom_bar()+
+  scale_x_continuous(breaks=c(1:10))+
+  theme_minimal()+
+  ggtitle('Frequency Count by Number of Countries of each company')
+```
+
+# Identify shell companies from ownership network graph
+
+## Owners with high number of companies 
+
+Let's take a look at the network of owners with high number of companies under them. We want to check if these companies under these owners are also co-owned by other owners. If a owner owns many companies that are not co-owned by others, these are likely shell companies. 
+
+```{r}
+# Extract company information 
+cp_oh<-mc3_edges %>%
+  filter(type=='Beneficial Owner') %>% 
+  filter(target %in% owners$target) %>% 
+  select(source)
+
+# Extract edge information
+oh_edges <- mc3_edges %>%
+  filter(type=='Beneficial Owner') %>% 
+  filter(target %in% owners$target | source %in% cp_oh)
+
+# Extract node information  
+oh_id1<-oh_edges %>% 
+  select(source) %>%
+  rename(id = source) %>% 
+  mutate(type='Company') 
+
+oh_id2 <- oh_edges %>%
+  select(target, type) %>%
+  rename(id = target) 
+
+oh_nodes <- rbind(oh_id1, oh_id2) %>% 
+  distinct()
+
+# Create owner_graph
+oh_graph <- as_tbl_graph(oh_edges, directed = FALSE)
+
+oh_graph<-oh_graph %>% 
+  activate(nodes) %>% 
+  left_join(oh_nodes, by=c("name"="id")) %>% 
+  mutate(betweenness_centrality=centrality_betweenness()) %>%
+  mutate(degree_centrality=centrality_degree())
+
+oh_graph
+```
+
+```{r}
+oh_graph %>%
+  ggraph(layout = "fr") +
+  geom_edge_link() +
+  geom_node_point(aes(colour=type,
+                      alpha=0.5,
+                      size=betweenness_centrality)) +
+  scale_size_continuous(range=c(1,10))+
+  theme_graph()
+```
+
+```{r}
+edges_df<-oh_graph%>%
+  activate(edges) %>% 
+  as.tibble() 
+
+nodes_df<-oh_graph%>%
+  activate(nodes) %>% 
+  as.tibble() %>%
+  rename(label=name) %>%
+  rename(group=type) %>% 
+  mutate(id=row_number()) 
+
+visNetwork(nodes=nodes_df,edges=edges_df)%>%    
+  visIgraphLayout(layout = "layout_with_fr") %>%  
+  visLegend() %>%
+  visEdges(arrows = "to", 
+           smooth = list(enabled = TRUE,              
+                         type = "curvedCW")) %>%
+  visNodes(font = list(size=30)) %>% 
+  visLayout(randomSeed=123) %>%    
+  visOptions(highlightNearest = TRUE, 
+             nodesIdSelection = TRUE)
+```
+# Group companies by industries based on analysis of product and services
+
+## Topic modelling to identify industries
+
+We first needs to tokenize the words from products and services description and filter companies from node data. 
+
+```{r}
+token_nodes <- mc3_nodes %>%
+  filter(type=='Company') %>% 
+  unnest_tokens(word, 
+                product_services) 
+token_nodes
+```
+We perform a frequency count for the words. 
+```{r}
+token_nodes %>%
+  count(word, sort = TRUE) %>%
+  top_n(15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "Unique words",
+      title = "Count of unique words found in product_services field")
+```
+
+The bar chart reveals that the unique words contains some words that may not be useful to use. For instance "a" and "to". In the word of text mining we call those words **stop words**. You want to remove these words from your analysis as they are fillers used to compose a sentence.
+
+
+```{r}
+stopwords_removed <- token_nodes %>% 
+  anti_join(stop_words)
+
+```
+
+```{r}
+stopwords_removed %>%
+  count(word, sort = TRUE) %>%
+  top_n(15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "Unique words",
+      title = "Count of unique words found in product_services field")
+```
+
+Following the completion of cleaning and visualization, the subsequent stage involves conducting Latent Dirichlet Allocation (LDA). LDA is an iterative algorithm utilized to reveal topics by examining discrete word frequencies. The underlying notion behind LDA is that documents typically pertain to a limited number of topics, and these topics are generally based on a small set of words. However, prior to that, it is necessary to construct a Document Term Matrix. This matrix mathematically represents the occurrence frequency of terms within a collection of documents. In the document-term matrix, each row corresponds to a document in the collection, while each column corresponds to a term.
+
+```{r}
+dtm<- stopwords_removed %>%
+  count(id, word) %>% 
+  cast_dtm(id, word, n) %>%  
+  as.matrix()
+```
+
+We use `ldatuning` to select the number of topic for LDA model. 
+```{r}
+result <- FindTopicsNumber(
+  dtm,
+  topics = seq(from = 2, to = 15, by = 1),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 2L,
+  verbose = TRUE
+)
+```
+One straightforward method for analyzing metrics involves identifying extrema. For a more comprehensive understanding, please refer to the relevant papers:
+
+Minimization:
+
+Arun2010 [1]
+CaoJuan2009 [2]
+Maximization:
+
+Deveaud2014 [3]
+Griffiths2004 [4,5]
+To facilitate easy analysis of the outcomes, the FindTopicsNumber_plot support function can be utilized.
+
+```{r}
+FindTopicsNumber_plot(result)
+```
+We will check 3-8 number of topics to see which one is optimal. 
+
+```{r}
+lda_topics <- LDA(
+  dtm,
+  k = 3,
+  method = "Gibbs",
+  control = list(seed=42)
+  ) %>%
+  tidy(matrix = "beta")
+word_probs <- lda_topics %>%
+  group_by(topic) %>%
+  top_n(15, beta) %>%
+  ungroup() %>%
+  mutate(term2 = fct_reorder(term, beta))
+ggplot(
+  word_probs,
+  aes(term2, beta, fill=as.factor(topic))
+  ) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+Topic 1 involves companies with unknown products and services or miscellaneous categories. Topic 2 involves companies that deal with food. Topic 3 can be identified as industrial products. 
+
+We will run LDA again with 4 topics
+
+```{r}
+lda_topics <- LDA(
+  dtm,
+  k = 4,
+  method = "Gibbs",
+  control = list(seed=42)
+  ) %>%
+  tidy(matrix = "beta")
+word_probs <- lda_topics %>%
+  group_by(topic) %>%
+  top_n(15, beta) %>%
+  ungroup() %>%
+  mutate(term2 = fct_reorder(term, beta))
+ggplot(
+  word_probs,
+  aes(term2, beta, fill=as.factor(topic))
+  ) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+We can see that the combination of words in topic 4 are not consistent. We also have the word products repeated in both 2 and 4. Therefore, for this analysis we will stick with only 3 industries.
+
+## Label the company by industry and observe patterns within industry
+
+```{r}
+lda_topics <- LDA(
+  dtm,
+  k = 3,
+  method = "Gibbs",
+  control = list(seed=42)
+  ) 
+```
+
+```{r}
+map<-tidy(lda_topics,matrix='gamma')
+company<-mc3_nodes %>%
+  right_join(map, by=c("id"="document"))
+  
+```
