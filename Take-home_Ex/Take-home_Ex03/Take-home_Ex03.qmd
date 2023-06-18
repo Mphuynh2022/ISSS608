@@ -522,16 +522,42 @@ IQR<-IQR(company$revenue)
 lower <-quartiles[1]-1.5*IQR
 upper <-quartiles[2]+1.5*IQR
 
-company<-company %>% 
+company2<-company %>% 
   filter((revenue>=lower) & (revenue <=upper))
 # After outlier removal
-boxplot(company$revenue)
+boxplot(company2$revenue)
+```
+
+```{r}
+quartiles <-quantile(company2$revenue, probs=c(.25,.75), na.rm=TRUE)
+IQR<-IQR(company2$revenue)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+company2<-company2 %>% 
+  filter((revenue>=lower) & (revenue <=upper))
+# After outlier removal
+boxplot(company2$revenue)
+```
+
+```{r}
+quartiles <-quantile(company2$revenue, probs=c(.25,.75), na.rm=TRUE)
+IQR<-IQR(company2$revenue)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+company2<-company2 %>% 
+  filter((revenue>=lower) & (revenue <=upper))
+# After outlier removal
+boxplot(company2$revenue)
 ```
 
 We observed right skewed distribution of revenue in all industries.
 
 ```{r}
-company %>% 
+company2 %>% 
   ggplot(aes(x = revenue, 
            y = Industry,
            fill=factor(after_stat(quantile))
@@ -553,7 +579,7 @@ We performed statistical analysis to find out if the mean revenue is different f
 
 ```{r}
 ggbetweenstats(
-  data = company,
+  data = company2,
   x = Industry, 
   y = revenue,
   type = "np",
