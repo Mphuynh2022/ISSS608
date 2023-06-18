@@ -50,7 +50,9 @@ Dataset contains the knowledge graph with 27,622 nodes and 24,038 edges:
 ```{r}
 pacman::p_load(jsonlite, tidygraph, ggraph,igraph,lsa, 
                visNetwork, graphlayouts, ggforce, 
-               skimr, tidytext, tidyverse, plotly, naniar, tm, topicmodels, ldatuning)
+               skimr, tidytext, tidyverse, plotly, naniar,
+               tm, topicmodels, ldatuning, ggridges,
+               ggstatsplot)
 ```
 
 ## Load data set
@@ -171,7 +173,6 @@ owners<-mc3_edges %>%
   filter(company_count>3)
 ```
 
-
 ## Node data
 
 Use [`skim()`](https://docs.ropensci.org/skimr/reference/skim.html) of [**skimr**](https://docs.ropensci.org/skimr/) package is used to display the summary statistics of *mc3_nodes* tibble data frame.
@@ -198,7 +199,8 @@ ggplot(data = mc3_nodes,
 ```
 
 ```{r}
-mc3_nodes %>% 
+cp_plot<-mc3_nodes %>% 
+  filter(type=='Company') %>% 
   group_by(id) %>% 
   mutate(country_count=n_distinct(country)) %>%
   arrange(desc(country_count)) %>% 
@@ -207,13 +209,24 @@ mc3_nodes %>%
   scale_x_continuous(breaks=c(1:10))+
   theme_minimal()+
   ggtitle('Frequency Count by Number of Countries of each company')
+
+ggplotly(cp_plot)
+```
+
+```{r}
+cp_multicount<-mc3_nodes %>% 
+  filter(type=='Company') %>% 
+  group_by(id) %>% 
+  mutate(entry_cnt=n()) %>%
+  filter(entry_cnt>1) %>% 
+  ungroup()
 ```
 
 # Identify shell companies from ownership network graph
 
-## Owners with high number of companies 
+## Owners with high number of companies
 
-Let's take a look at the network of owners with high number of companies under them. We want to check if these companies under these owners are also co-owned by other owners. If a owner owns many companies that are not co-owned by others, these are likely shell companies. 
+Let's take a look at the network of owners with high number of companies under them. We want to check if these companies under these owners are also co-owned by other owners. If a owner owns many companies that are not co-owned by others, these are likely shell companies.
 
 ```{r}
 # Extract company information 
@@ -286,11 +299,12 @@ visNetwork(nodes=nodes_df,edges=edges_df)%>%
   visOptions(highlightNearest = TRUE, 
              nodesIdSelection = TRUE)
 ```
+
 # Group companies by industries based on analysis of product and services
 
 ## Topic modelling to identify industries
 
-We first needs to tokenize the words from products and services description and filter companies from node data. 
+We first needs to tokenize the words from products and services description and filter companies from node data.
 
 ```{r}
 token_nodes <- mc3_nodes %>%
@@ -299,7 +313,9 @@ token_nodes <- mc3_nodes %>%
                 product_services) 
 token_nodes
 ```
-We perform a frequency count for the words. 
+
+We perform a frequency count for the words.
+
 ```{r}
 token_nodes %>%
   count(word, sort = TRUE) %>%
@@ -314,11 +330,11 @@ token_nodes %>%
       title = "Count of unique words found in product_services field")
 ```
 
-The bar chart reveals that the unique words contains some words that may not be useful to use. For instance "a" and "to". In the word of text mining we call those words **stop words**. You want to remove these words from your analysis as they are fillers used to compose a sentence.
-
+The bar chart reveals that the unique words contains some words that may not be useful to use. For instance "a" and "to". In the word of text mining we call those words **stop words**. You want to remove these words from your analysis as they are fillers used to compose a sentence. We also will filter common words such as unknown and products, which will not be helpful in distinguishing the companies.
 
 ```{r}
-stopwords_removed <- token_nodes %>% 
+stopwords_removed <- token_nodes %>%
+  filter(!word %in% c('unknown', 'products','related')) %>% 
   anti_join(stop_words)
 
 ```
@@ -346,11 +362,12 @@ dtm<- stopwords_removed %>%
   as.matrix()
 ```
 
-We use `ldatuning` to select the number of topic for LDA model. 
+We use `ldatuning` to select the number of topic for LDA model.
+
 ```{r}
 result <- FindTopicsNumber(
   dtm,
-  topics = seq(from = 2, to = 15, by = 1),
+  topics = seq(from = 2, to = 20, by = 1),
   metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
   method = "Gibbs",
   control = list(seed = 77),
@@ -358,27 +375,33 @@ result <- FindTopicsNumber(
   verbose = TRUE
 )
 ```
+
 One straightforward method for analyzing metrics involves identifying extrema. For a more comprehensive understanding, please refer to the relevant papers:
 
 Minimization:
 
-Arun2010 [1]
-CaoJuan2009 [2]
+-   Arun2010 \[1\]
+
+-   CaoJuan2009 \[2\]
+
 Maximization:
 
-Deveaud2014 [3]
-Griffiths2004 [4,5]
+-   Deveaud2014 \[3\]
+
+-   Griffiths2004 \[4,5\]
+
 To facilitate easy analysis of the outcomes, the FindTopicsNumber_plot support function can be utilized.
 
 ```{r}
 FindTopicsNumber_plot(result)
 ```
-We will check 3-8 number of topics to see which one is optimal. 
+
+From the graph, it appears that 7 topics are optimal.
 
 ```{r}
 lda_topics <- LDA(
   dtm,
-  k = 3,
+  k = 7,
   method = "Gibbs",
   control = list(seed=42)
   ) %>%
@@ -396,14 +419,13 @@ ggplot(
   facet_wrap(~ topic, scales = "free") +
   coord_flip()
 ```
-Topic 1 involves companies with unknown products and services or miscellaneous categories. Topic 2 involves companies that deal with food. Topic 3 can be identified as industrial products. 
 
-We will run LDA again with 4 topics
+We can see that topic 5 overlap with topic 3 and topic 4. We can try to reduce the number of topics to 5.
 
 ```{r}
 lda_topics <- LDA(
   dtm,
-  k = 4,
+  k = 5,
   method = "Gibbs",
   control = list(seed=42)
   ) %>%
@@ -421,22 +443,128 @@ ggplot(
   facet_wrap(~ topic, scales = "free") +
   coord_flip()
 ```
-We can see that the combination of words in topic 4 are not consistent. We also have the word products repeated in both 2 and 4. Therefore, for this analysis we will stick with only 3 industries.
+
+We can see that better distinction in the topics:
+
+-   topic 1: accessories and materials
+
+-   topic 2: food
+
+-   topic 3: equipment
+
+-   topic 4: fish and seafood
+
+-   topic 5: services
 
 ## Label the company by industry and observe patterns within industry
 
+We will use `tidy()` to get the probability of the topic for each company. Then we will take a look at each industry in terms of their network and interactions and disregard companies with unknown products and services.
+
 ```{r}
+# Extract probability of the topic for each company
 lda_topics <- LDA(
   dtm,
-  k = 3,
+  k = 5,
   method = "Gibbs",
   control = list(seed=42)
-  ) 
+  ) %>% 
+  tidy(matrix = "gamma")
+
+# Summarize company revenue
+company<-mc3_nodes %>%
+  filter(type=='Company') %>% 
+  group_by(id) %>% 
+  summarise(revenue=sum(revenue_omu))
 ```
 
 ```{r}
-map<-tidy(lda_topics,matrix='gamma')
-company<-mc3_nodes %>%
-  right_join(map, by=c("id"="document"))
-  
+# Assign topic with the highest gamma score to the document/company
+cp_map<-lda_topics %>% 
+  group_by(document) %>% 
+  summarise(gamma=max(gamma)) 
+
+cp_map<-cp_map %>% 
+  left_join(lda_topics) %>% 
+  mutate(topic=recode(topic, '1'="accessories_materials",
+                      '2'="food",
+                      '3'="equipment",
+                      '4'="fish_seafood",
+                      '5'="services")) %>%
+  rename("Industry"="topic") %>% 
+  select(document, Industry)
+
+# Use left join to join back to company revenue info
+company<-company %>%
+  left_join(cp_map, by=c("id"="document"))
+
+# Drop those company with unknown industry
+company<- company %>% 
+  drop_na(Industry) %>% 
+  drop_na(revenue)
 ```
+
+One company can be in a few industries at the same time.
+
+## Identify the patterns within each industry
+
+## Revenue pattern
+
+We can check the distribution of revenue pattern. We need to remove the extreme outliers by using IQR.
+
+```{r}
+boxplot(company$revenue)
+```
+
+```{r}
+quartiles <-quantile(company$revenue, probs=c(.25,.75), na.rm=TRUE)
+IQR<-IQR(company$revenue)
+
+lower <-quartiles[1]-1.5*IQR
+upper <-quartiles[2]+1.5*IQR
+
+company<-company %>% 
+  filter((revenue>=lower) & (revenue <=upper))
+# After outlier removal
+boxplot(company$revenue)
+```
+
+We observed right skewed distribution of revenue in all industries.
+
+```{r}
+company %>% 
+  ggplot(aes(x = revenue, 
+           y = Industry,
+           fill=factor(after_stat(quantile))
+           )) +
+stat_density_ridges(
+    geom = "density_ridges_gradient",
+    calc_ecdf = TRUE, 
+    quantiles = 4,
+    quantile_lines = TRUE) +
+  scale_fill_viridis_d(name = "Quartiles") +
+  theme_ridges()+
+  ggtitle("Distribution of Revenue across different Industries")+
+  theme_minimal()+
+  ylab("Industries")+
+  xlab("Revenue")
+```
+
+We performed statistical analysis to find out if the mean revenue is different for the different industries. From the results, we can see that fishing and service industries tend to have lower mean revenue than food industry.
+
+```{r}
+ggbetweenstats(
+  data = company,
+  x = Industry, 
+  y = revenue,
+  type = "np",
+  mean.ci = TRUE, 
+  pairwise.comparisons = TRUE, 
+  pairwise.display = "s",
+  p.adjust.method = "fdr",
+  messages = FALSE
+) + 
+  ggtitle("Compare mean revenue among Industries")+
+  xlab("Industries")
+```
+
+## 
