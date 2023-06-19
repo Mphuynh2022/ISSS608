@@ -52,7 +52,7 @@ pacman::p_load(jsonlite, tidygraph, ggraph,igraph,lsa,
                visNetwork, graphlayouts, ggforce, 
                skimr, tidytext, tidyverse, plotly, naniar,
                tm, topicmodels, ldatuning, ggridges,
-               ggstatsplot)
+               ggstatsplot, text2vec)
 ```
 
 ## Load data set
@@ -213,13 +213,32 @@ cp_plot<-mc3_nodes %>%
 ggplotly(cp_plot)
 ```
 
+We will save companies that operate in multiple countries in cp_multicount
+
 ```{r}
 cp_multicount<-mc3_nodes %>% 
   filter(type=='Company') %>% 
   group_by(id) %>% 
-  mutate(entry_cnt=n()) %>%
+  summarise(entry_cnt=n()) %>%
   filter(entry_cnt>1) %>% 
   ungroup()
+```
+
+Let's also take a look at the distribution of different countries for the companies.
+
+```{r}
+mc3_nodes %>%
+  filter(type=='Company') %>%
+  select(id, country) %>% 
+  distinct() %>%
+  group_by(country) %>% 
+  mutate(cnt=n()) %>% 
+  ggplot(aes(x=reorder(country, cnt)))+
+  geom_bar()+
+  theme_minimal()+
+  ggtitle('Frequency Count by Countries of Company')+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
 ```
 
 # Identify shell companies from ownership network graph
@@ -275,6 +294,8 @@ oh_graph %>%
   scale_size_continuous(range=c(1,10))+
   theme_graph()
 ```
+
+We can create an interactive graph to get the names of the companies and beneficial owners by hovering over the nodes.
 
 ```{r}
 edges_df<-oh_graph%>%
@@ -512,52 +533,23 @@ One company can be in a few industries at the same time.
 We can check the distribution of revenue pattern. We need to remove the extreme outliers by using IQR.
 
 ```{r}
-boxplot(company$revenue)
+company %>% 
+  ggplot(aes(x=Industry, y=revenue))+
+  geom_boxplot()+
+  theme_minimal()
 ```
 
 ```{r}
-quartiles <-quantile(company$revenue, probs=c(.25,.75), na.rm=TRUE)
-IQR<-IQR(company$revenue)
-
-lower <-quartiles[1]-1.5*IQR
-upper <-quartiles[2]+1.5*IQR
-
-company2<-company %>% 
-  filter((revenue>=lower) & (revenue <=upper))
-# After outlier removal
-boxplot(company2$revenue)
-```
-
-```{r}
-quartiles <-quantile(company2$revenue, probs=c(.25,.75), na.rm=TRUE)
-IQR<-IQR(company2$revenue)
-
-lower <-quartiles[1]-1.5*IQR
-upper <-quartiles[2]+1.5*IQR
-
-company2<-company2 %>% 
-  filter((revenue>=lower) & (revenue <=upper))
-# After outlier removal
-boxplot(company2$revenue)
-```
-
-```{r}
-quartiles <-quantile(company2$revenue, probs=c(.25,.75), na.rm=TRUE)
-IQR<-IQR(company2$revenue)
-
-lower <-quartiles[1]-1.5*IQR
-upper <-quartiles[2]+1.5*IQR
-
-company2<-company2 %>% 
-  filter((revenue>=lower) & (revenue <=upper))
-# After outlier removal
-boxplot(company2$revenue)
+company_rmo<-company %>% 
+  group_by(Industry) %>% 
+  mutate(revenue_cleaned=ifelse(revenue>quantile(revenue, 0.75, na.rm=T)+1.5*IQR(revenue, na.rm=T) | revenue<quantile(revenue, 0.25, na.rm=T), NA, revenue)) %>% 
+  na.omit()
 ```
 
 We observed right skewed distribution of revenue in all industries.
 
 ```{r}
-company2 %>% 
+company_rmo %>% 
   ggplot(aes(x = revenue, 
            y = Industry,
            fill=factor(after_stat(quantile))
@@ -575,11 +567,11 @@ stat_density_ridges(
   xlab("Revenue")
 ```
 
-We performed statistical analysis to find out if the mean revenue is different for the different industries. From the results, we can see that fishing and service industries tend to have lower mean revenue than food industry.
+We performed statistical analysis to find out if the mean revenue is different for the different industries. From the results, we can see that equipment and food industry have the highest mean revenue. Fishing, accessories/materials and services have lowest mean revenue.
 
 ```{r}
 ggbetweenstats(
-  data = company2,
+  data = company_rmo,
   x = Industry, 
   y = revenue,
   type = "np",
